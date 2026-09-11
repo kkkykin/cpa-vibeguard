@@ -12,7 +12,9 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Regressions for capture-group occurrence selection, UTF-8/CRLF/multiline positions, crossing spans, gitleaks:allow comments, generic-rule suppression, invalid/disabled rules, and immutable concurrent bindings.
 3. Requests and ordinary responses
    - [x] Transactional random-marker store and exact restoration (`internal/token`): 128-bit random IDs, stable concurrent reuse, scope isolation, rollback, bounded entries/bytes, idle TTL, active leases, and single-pass restoration. Verified with `go test -race ./internal/token`.
-   - [ ] Protocol adapters, request mappings, text and tool codecs, native wrappers, and specialized text entrypoints.
+   - [x] SourceFormat adapters for Chat/legacy, Responses/compact, Claude/count, Gemini/count, Interactions, Codex/Antigravity, image/video, and SDK search text. Paired fixtures are in `testdata/protocols.json`; selected-field, opaque-data, precision, JSON tool codec, and hint tests pass.
+   - [x] Request scope integration, atomic request-error rollback, sticky retries, ordinary-response restoration, and response degradation. All paired fixtures pass through the real C ABI; unmodified host Chat and legacy Completions redact before upstream and restore after execution (`TestHostProtectedChatAndLegacy`).
+   - [ ] Host coverage for the remaining formats and native/cross-format routes; session/stream coverage follows below.
 4. Sessions and multi-turn requests
    - [ ] Ordered sources, identity isolation, leases, history references, capacity, and idempotence.
 5. Streaming and WebSocket

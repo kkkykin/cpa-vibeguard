@@ -2,6 +2,8 @@
 import base64
 import ctypes as c
 import json
+import pathlib
+import re
 import sys
 
 
@@ -68,8 +70,65 @@ for _ in range(2):
 denied = call("request.intercept_before", {"RequestID": "native-deny"})
 assert denied["Terminate"] and denied["StatusCode"] == 400
 call("request.complete", {"RequestID": "native-deny", "Outcome": "rejected"})
+
+rule_config = "rule_sources: [{inline: {extend: {useDefault: false}, rules: [{id: fixture, regex: PRIVATE}]}}]"
+call("plugin.reconfigure", lifecycle(rule_config))
+fixtures = json.loads((pathlib.Path(__file__).parents[2] / "testdata/protocols.json").read_text())
+
+
+def normalize(value):
+    if isinstance(value, dict):
+        return {k: normalize(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize(v) for v in value]
+    if isinstance(value, str) and value.startswith(("{", "[")):
+        try:
+            return normalize(json.loads(value))
+        except json.JSONDecodeError:
+            pass
+    return value
+
+
+def replace_fields(value, marker):
+    # Fixture payloads distinguish selected text (exact PRIVATE) from opaque
+    # strings (PRIVATE_MEDIA, PRIVATE_ID, etc.). Preserve the latter verbatim.
+    if isinstance(value, dict):
+        return {k: replace_fields(v, marker) for k, v in value.items()}
+    if isinstance(value, list):
+        return [replace_fields(v, marker) for v in value]
+    if value == "PRIVATE":
+        return marker
+    if isinstance(value, str) and value.startswith(("{", "[")):
+        try:
+            return json.dumps(replace_fields(json.loads(value), marker))
+        except json.JSONDecodeError:
+            pass
+    return value
+
+
+for fixture in fixtures:
+    request = dict(fixture["request"])
+    request.pop("previous_response_id", None)
+    request.pop("previous_interaction_id", None)
+    request_id = "native-" + fixture["name"]
+    intercepted = call("request.intercept_before", {
+        "RequestID": request_id, "SourceFormat": fixture["format"],
+        "Body": base64.b64encode(json.dumps(request).encode()).decode()})
+    assert not intercepted["Terminate"], intercepted
+    masked = base64.b64decode(intercepted["Body"]).decode()
+    markers = set(re.findall(r"\[\[redacted:v1:[0-9a-f]{32}\]\]", masked))
+    assert len(markers) == 1, fixture["name"]
+    marker = markers.pop()
+    response = replace_fields(fixture["response"], marker)
+    restored = call("response.intercept_after", {
+        "RequestID": request_id, "SourceFormat": fixture["format"],
+        "Body": base64.b64encode(json.dumps(response).encode()).decode()})
+    actual = json.loads(base64.b64decode(restored["Body"]))
+    assert normalize(actual) == normalize(fixture["response"]), fixture["name"]
+    call("request.complete", {"RequestID": request_id, "Outcome": "succeeded"})
+
 call("plugin.quiesce", {})
 assert call("request.intercept_before", {"RequestID": "quiesced"})["StatusCode"] == 503
 call("plugin.shutdown", {})
 api.shutdown()
-print("ABI 1 / schema 6: registration, four hooks, reconfigure, quiesce, shutdown passed")
+print("ABI 1 / schema 6: lifecycle and all protocol request/JSON response fixtures passed")

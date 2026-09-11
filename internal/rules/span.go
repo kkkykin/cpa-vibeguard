@@ -15,12 +15,42 @@ type Span struct {
 	RuleIDs    []string
 }
 
+const MaxScanMatches = 32768
+
 func (b *Bound) scan(ctx context.Context, text string) ([]Span, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.New("scan_canceled")
 	}
 	if !utf8.ValidString(text) {
 		return nil, errors.New("scan_invalid_utf8")
+	}
+	// The library returns a complete finding slice. Bound that allocation before
+	// entering it, without dropping any part of a scan that was accepted.
+	remaining := MaxScanMatches
+	lower := strings.ToLower(text)
+	for _, r := range b.rules {
+		if ctx.Err() != nil {
+			return nil, errors.New("scan_canceled")
+		}
+		if r.Regex == nil || r.Path != nil {
+			continue
+		}
+		if len(r.Keywords) > 0 {
+			matched := false
+			for _, k := range r.Keywords {
+				if strings.Contains(lower, strings.ToLower(k)) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		remaining -= len(r.Regex.FindAllStringIndex(text, remaining+1))
+		if remaining < 0 {
+			return nil, errors.New("scan_match_limit")
+		}
 	}
 	findings := b.detector.DetectContext(ctx, detect.Fragment{Raw: text})
 	if err := ctx.Err(); err != nil {

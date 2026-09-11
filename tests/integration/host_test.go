@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kkkykin/cpa-vibeguard/internal/token"
 )
 
 type hostProcess struct {
@@ -196,5 +198,34 @@ func TestHostLifecycle(t *testing.T) {
 	logs, _ := os.ReadFile(h.logPath)
 	if !bytes.Contains(logs, []byte("plugin registered")) || !bytes.Contains(logs, []byte("cpa-vibeguard")) {
 		t.Fatalf("missing real host registration evidence: %s", logs)
+	}
+}
+
+func TestHostProtectedChatAndLegacy(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct{ Messages []struct{ Content string } }
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			w.WriteHeader(400)
+			return
+		}
+		if len(request.Messages) != 1 || !token.Valid(request.Messages[0].Content) {
+			t.Errorf("upstream did not receive a redacted message: %+v", request)
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "fixture", "object": "chat.completion", "choices": []any{map[string]any{"index": 0, "message": map[string]any{"role": "assistant", "content": request.Messages[0].Content}, "finish_reason": "stop"}}})
+	}))
+	defer upstream.Close()
+	h := startHost(t, upstream.URL, "      rule_sources: [{inline: {extend: {useDefault: false}, rules: [{id: fixture, regex: PRIVATE}]}}]")
+	for _, tc := range []struct{ path, body string }{
+		{"/v1/chat/completions", `{"model":"fixture-chat","messages":[{"role":"user","content":"PRIVATE"}]}`},
+		{"/v1/completions", `{"model":"fixture-chat","prompt":"PRIVATE"}`},
+	} {
+		status, raw := post(t, h.url+tc.path, tc.body, false)
+		if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
+			t.Fatalf("%s: %d %s", tc.path, status, raw)
+		}
 	}
 }
