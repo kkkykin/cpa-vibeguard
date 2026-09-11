@@ -1,6 +1,6 @@
 # Implementation evidence
 
-The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask is evidence for that subtask only.
+The six delivery steps in PLAN.md are complete for the pinned Linux/amd64 target and the observed API boundaries documented below. Final verification was completed on 2026-09-12 against code baseline `312396e`; the acceptance record is at the end of this file.
 
 1. Plugin skeleton, configuration, and entrypoint inventory
    - [x] Strict configuration defaults, types, duplicate members, JSON Pointer syntax, and header conditions (`internal/config`, `internal/document`). Verified with `go test ./internal/document ./internal/config`.
@@ -42,4 +42,22 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Real CPA config writes exercise rejected updates, successful rule disable/re-enable, compatible session-source changes, and an active stream retaining its old event limit/mapping (`TestHostConfigurationSnapshots`). CPA would detach hooks on a reconfigure RPC error; the plugin instead reports `configuration_error` in a successful registration and logs a value-free diagnostic while keeping the previous config. Initial registration still fails on invalid config. Native ABI and unit tests cover this distinction and quiesce/reactivation.
    - [x] `TestHostRestartAndBinaryReplacement` verifies response-ID continuation before restart/replacement, rejection of stale references afterwards, fresh markers and unchanged unknown old markers. Versioned libraries are installed by atomic rename in a temporary plugin directory after model responses finish. A failed library load exercises CPA's quiesce/reconfigure rollback. The pinned config watcher needs an in-place config write; replacing only the same library pathname does not trigger a new instance.
    - [x] Full-suite execution exposed CPA's startup interval where `/healthz` responds before the initial watcher reload replaces executors and closes early WebSockets. The test harness now waits for this start's watcher-ready log and HTTP health; log offsets prevent stale readiness after restart. The native/fallback WebSocket and restart/replacement tests pass five repeated runs with this readiness condition.
-   - [ ] Full tests, race, vet, shared-library/host tests, reconfiguration/restart/replacement, benchmarks, and observed coverage matrix.
+   - [x] Full tests, race, vet, shared-library/host tests, reconfiguration/restart/replacement, benchmarks, and observed coverage matrix. The final complete host suite passed after fixing startup readiness and explicitly verifying the silent-stream disconnect boundary in both WebSocket execution modes.
+
+Final verification on Linux/amd64 with Go 1.26.0:
+
+| Check | Result |
+| --- | --- |
+| `make check` | PASS: all eight core test packages, their race runs, `go vet ./...`, and the real c-shared build |
+| `make integration` | PASS: full C ABI / CPA / Caddy suite, including protocol matrix, retries, concurrency, cancellation, live configuration, restart and binary replacement |
+| `go test -race -tags=integration -count=1 ./tests/integration/...` | PASS: the complete integration test process under the race detector |
+| WebSocket / restart regression repeats | PASS: five runs of native/fallback turns and restart/replacement; five runs of disconnect cleanup in both upstream modes |
+| `make bench` | PASS: results and measurement scope in [BENCHMARKS.md](BENCHMARKS.md) |
+| Documented examples | PASS: 12 YAML/example configurations registered and exercised via the C ABI; Caddy validation and local links checked |
+| `go mod verify` | PASS: all modules verified; `go.mod` has no replace directives |
+| Formatting and patch checks | `gofmt -l cmd internal tests` produced no output; `git diff --check` passed |
+| Reference CPA checkout | `/tmp/CLIProxyAPI` is unchanged at `09a29bd345bc44c473abe7fd07859e32df2ea543` |
+
+The build produced `dist/cpa-vibeguard.so` and `dist/cpa-vibeguard.h`; integration scripts built `bin/cpa-host` from the pinned module and `bin/caddy` v2.10.2. These generated artifacts are intentionally ignored by Git. The host and shared library use the normal build; `make check` instruments the Go core directly for race detection, and the integration race command instruments the Go test process, not those separately built processes/libraries.
+
+Committed evidence includes 15 paired protocol fixtures, five stream fixtures, and 66 observed entrypoint cases. The supported scope remains that in [COVERAGE.md](COVERAGE.md): Alpha Search HTTP routes bypass these hooks, media payloads remain opaque, SDK wrapper fixtures do not imply blanket provider coverage, and Realtime/Live plus the full cachedContent lifecycle are not claimed. Host RPC faults can bypass the plugin; both WebSocket upstream modes can retain an active lease during a silent disconnected stream until the host observes the disconnect. These are recorded host/API boundaries, not pending host modifications.
