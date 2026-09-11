@@ -2,6 +2,8 @@
 
 本页基于未修改的 CPA v7.2.157、C ABI 1 / RPC schema 6。安装与版本表见 [README](../README.md)，所有配置键见 [CONFIGURATION.md](CONFIGURATION.md)。
 
+启动时，`/healthz` 可先于客户端初始化完成响应；固定宿主随后首次加载 watcher 配置会重建执行器，此前建立的原生 WebSocket 可能收到 1012 `upstream requires HTTP replay`。部署就绪判断应同时确认本次启动的客户端加载、`file watcher started` 和插件注册日志，避免立即把模型流量送入仅已开始监听的进程。
+
 **会话与缓存。** 默认每个 RequestID 独立持有原文映射，request.complete 后释放。显式配置 session 才跨请求复用；作用域是 `(namespace, caller_scope, session_id)`，来源类型和来源序号不参与作用域键。不同调用方、namespace 或 ID 不互相还原。session ID 的 header/JSON/metadata 选择只在第一次请求钩子执行；凭据重试不会换会话、生成新标记或重复追加提示。
 
 同一作用域的相同 UTF-8 原文字节复用同一个随机标记，不做大小写或 Unicode 归一化。相同历史和规则下，后续请求的脱敏历史前缀保持稳定。请求模式、空闲回收、规则检测范围变化、重启或插件替换可能改变前缀，从而影响上游 prompt/KV 缓存。`prompt_cache_key` 不能抵消正文变化；本地测试只核对请求前缀一致，真实缓存命中与费用须由上游用量数据验证。

@@ -118,6 +118,12 @@ func (h *hostProcess) start(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	info, err := log.Stat()
+	if err != nil {
+		log.Close()
+		t.Fatal(err)
+	}
+	startOffset := info.Size()
 	cmd := exec.Command(h.binary, "--config", h.configPath, "--local-model")
 	cmd.Dir = h.dir
 	cmd.Env = append(os.Environ(), h.env...)
@@ -141,6 +147,17 @@ func (h *hostProcess) start(t *testing.T) {
 		case <-deadline:
 			t.Fatal("host startup timed out")
 		case <-ticker.C:
+			// CPA serves /healthz before its initial watcher load replaces
+			// executors. Starting a WebSocket in that interval can close it
+			// with "upstream requires HTTP replay" during initialization.
+			// Use only this start's logs so a restart cannot reuse readiness.
+			raw, err := os.ReadFile(h.logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if int64(len(raw)) < startOffset || !bytes.Contains(raw[startOffset:], []byte("file watcher started for config and auth directory changes")) {
+				continue
+			}
 			resp, err := http.Get(h.url + "/healthz")
 			if err == nil {
 				resp.Body.Close()
