@@ -23,13 +23,32 @@ import (
 )
 
 type hostProcess struct {
-	url     string
-	cmd     *exec.Cmd
-	done    chan error
-	logPath string
+	url                     string
+	cmd                     *exec.Cmd
+	done                    chan error
+	logPath                 string
+	configPath, dir, binary string
+	env                     []string
 }
 
 func startHost(t *testing.T, upstream, pluginConfig string) *hostProcess {
+	return startHostConfigured(t, hostSettings{PluginConfig: pluginConfig, Providers: fmt.Sprintf(`openai-compatibility:
+  - name: fixture
+    base-url: %q
+    api-key-entries:
+      - api-key: fixture-upstream
+    models:
+      - name: fixture-chat
+        alias: fixture-chat
+`, upstream+"/v1")})
+}
+
+type hostSettings struct {
+	Providers, PluginConfig, PluginDir, Extra string
+	Env                                       []string
+}
+
+func startHostConfigured(t *testing.T, settings hostSettings) *hostProcess {
 	t.Helper()
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -48,6 +67,10 @@ func startHost(t *testing.T, upstream, pluginConfig string) *hostProcess {
 	if err := l.Close(); err != nil {
 		t.Fatal(err)
 	}
+	pluginDir := settings.PluginDir
+	if pluginDir == "" {
+		pluginDir = filepath.Join(root, "dist")
+	}
 	config := fmt.Sprintf(`host: "127.0.0.1"
 port: %d
 auth-dir: %q
@@ -55,6 +78,7 @@ api-keys: [fixture-client]
 commercial-mode: true
 disable-cooling: true
 request-retry: 0
+disable-claude-cloak-mode: true
 remote-management:
   disable-control-panel: true
 plugins:
@@ -64,47 +88,43 @@ plugins:
     cpa-vibeguard:
       enabled: true
 %s
-openai-compatibility:
-  - name: fixture
-    base-url: %q
-    api-key-entries:
-      - api-key: fixture-upstream
-    models:
-      - name: fixture-chat
-        alias: fixture-chat
-`, port, filepath.Join(dir, "auths"), filepath.Join(root, "dist"), pluginConfig, upstream+"/v1")
+%s
+%s
+`, port, filepath.Join(dir, "auths"), pluginDir, settings.PluginConfig, settings.Providers, settings.Extra)
 	configPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
 		t.Fatal(err)
 	}
-	logPath := filepath.Join(dir, "host.log")
-	log, err := os.Create(logPath)
+	h := &hostProcess{url: fmt.Sprintf("http://127.0.0.1:%d", port), logPath: filepath.Join(dir, "host.log"), configPath: configPath, dir: dir, binary: binary, env: settings.Env}
+	t.Cleanup(func() {
+		h.stop(t)
+		if t.Failed() {
+			b, _ := os.ReadFile(h.logPath)
+			t.Logf("host log:\n%s", b)
+		}
+	})
+	h.start(t)
+	return h
+}
+
+func (h *hostProcess) start(t *testing.T) {
+	t.Helper()
+	log, err := os.OpenFile(h.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "--config", configPath, "--local-model")
-	cmd.Dir = dir
+	cmd := exec.Command(h.binary, "--config", h.configPath, "--local-model")
+	cmd.Dir = h.dir
+	cmd.Env = append(os.Environ(), h.env...)
 	cmd.Stdout = log
 	cmd.Stderr = log
 	if err := cmd.Start(); err != nil {
 		log.Close()
 		t.Fatal(err)
 	}
-	h := &hostProcess{url: fmt.Sprintf("http://127.0.0.1:%d", port), cmd: cmd, done: make(chan error, 1), logPath: logPath}
-	go func() { h.done <- cmd.Wait(); log.Close() }()
-	t.Cleanup(func() {
-		_ = cmd.Process.Signal(os.Interrupt)
-		select {
-		case <-h.done:
-		case <-time.After(5 * time.Second):
-			_ = cmd.Process.Kill()
-			<-h.done
-		}
-		if t.Failed() {
-			b, _ := os.ReadFile(logPath)
-			t.Logf("host log:\n%s", b)
-		}
-	})
+	h.cmd, h.done = cmd, make(chan error, 1)
+	done := h.done
+	go func() { done <- cmd.Wait(); log.Close() }()
 	deadline := time.After(20 * time.Second)
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
@@ -120,11 +140,26 @@ openai-compatibility:
 			if err == nil {
 				resp.Body.Close()
 				if resp.StatusCode == 200 {
-					return h
+					return
 				}
 			}
 		}
 	}
+}
+
+func (h *hostProcess) stop(t *testing.T) {
+	t.Helper()
+	if h.cmd == nil {
+		return
+	}
+	_ = h.cmd.Process.Signal(os.Interrupt)
+	select {
+	case <-h.done:
+	case <-time.After(5 * time.Second):
+		_ = h.cmd.Process.Kill()
+		<-h.done
+	}
+	h.cmd = nil
 }
 
 func post(t *testing.T, url, body string, skip bool) (int, []byte) {

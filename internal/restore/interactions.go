@@ -62,7 +62,7 @@ func (s *Stream) interactions(m map[string]any, name string) ([]map[string]any, 
 					return nil, nil, err
 				}
 			}
-		case "signature", "signature_delta":
+		case "signature", "signature_delta", "thought_signature":
 			return nil, nil, nil
 		case "function_call", "function_result", "image", "audio", "video", "code_execution_call", "code_execution_result":
 			_, err = s.snapshot("interaction_step", delta)
@@ -107,7 +107,7 @@ func (s *Stream) interactions(m map[string]any, name string) ([]map[string]any, 
 		return tailEvents(tails), refs, nil
 	case "interaction.failed", "error":
 		return nil, nil, errors.New("upstream_stream_error")
-	case "ping":
+	case "ping", "interaction.status_update":
 		return nil, nil, nil
 	default:
 		return nil, nil, errors.New("unsupported_interactions_stream_event")

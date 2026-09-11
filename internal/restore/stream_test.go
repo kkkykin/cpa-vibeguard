@@ -396,3 +396,40 @@ func TestStreamLimitsAndMalformedEvents(t *testing.T) {
 		t.Fatal("restoration expansion limit ignored")
 	}
 }
+
+func TestCPARecordStreamsAndOpaqueInteractionControl(t *testing.T) {
+	for _, tc := range []streamCase{textCases()[3], textCases()[4]} {
+		s := NewStream(tc.format, config.Defaults().Limits, lookup)
+		var output []byte
+		for _, m := range []map[string]any{tc.delta(marker[:20], 0), tc.delta(marker[20:], 0), tc.stop(marker, 0)} {
+			raw := bytes.TrimRight(encodeEvent(m, "sse"), "\n")
+			// Codex yields the event and data lines as two separate records.
+			for _, record := range bytes.SplitN(raw, []byte("\n"), 2) {
+				b, _, err := s.Push(record)
+				if err != nil {
+					t.Fatal(tc.format, err)
+				}
+				output = append(output, b...)
+			}
+		}
+		if got := joined(tc, decodeEvents(t, output, "sse")); got != "中文\"\n\\secret" {
+			t.Fatal(tc.format, got)
+		}
+	}
+	s := NewStream("interactions", config.Defaults().Limits, lookup)
+	for _, raw := range []string{
+		`event: interaction.status_update` + "\ndata: " + `{"event_type":"interaction.status_update","status":"in_progress"}`,
+		`event: step.delta` + "\ndata: " + `{"event_type":"step.delta","index":0,"delta":{"type":"thought_signature","signature":"` + marker + `"}}`,
+	} {
+		b, _, err := s.Push([]byte(raw))
+		if err != nil || len(b) == 0 {
+			t.Fatal(err)
+		}
+		if strings.Contains(raw, marker) && !bytes.Contains(b, []byte(marker)) {
+			t.Fatal("signature rewritten")
+		}
+	}
+	if got := joined(textCases()[4], pushEvent(t, s, textCases()[4], textCases()[4].delta(marker, 1))); got != "中文\"\n\\secret" {
+		t.Fatal("control event stopped restoration")
+	}
+}

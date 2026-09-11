@@ -54,7 +54,7 @@ type tail struct {
 
 func NewStream(format string, limits config.Limits, lookup Lookup) *Stream {
 	return &Stream{format: format, limits: limits, lookup: lookup,
-		framer: Framer{Limit: limits.EventBytes}, fields: make(map[string]*streamField),
+		framer: Framer{Limit: limits.EventBytes, Records: true}, fields: make(map[string]*streamField),
 		closed: make(map[string]bool), aliases: make(map[string]string)}
 }
 
@@ -131,7 +131,7 @@ func (s *Stream) Push(chunk []byte) ([]byte, []protocol.Reference, error) {
 			continue
 		}
 		if !frame.HasData {
-			out.Write(frame.Raw)
+			out.Write(frame.Render(frame.Data))
 			continue
 		}
 		if bytes.Equal(bytes.TrimSpace(frame.Data), []byte("[DONE]")) {
@@ -141,7 +141,7 @@ func (s *Stream) Push(chunk []byte) ([]byte, []protocol.Reference, error) {
 				return nil, nil, errors.New("stream_done_before_fields")
 			}
 			s.ended = true
-			out.Write(frame.Raw)
+			out.Write(frame.Render(frame.Data))
 			continue
 		}
 		if s.ended {

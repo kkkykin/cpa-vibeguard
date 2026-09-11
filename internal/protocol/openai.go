@@ -281,6 +281,14 @@ func (d *Document) responsesResponse(m map[string]any, path string) error {
 	if err := d.reference(m, "id", "response", true); err != nil {
 		return err
 	}
+	if err := d.str(m, "instructions", path, false); err != nil {
+		return err
+	}
+	// Responses can echo the redacted request's tool definitions. They are
+	// complete fields in both ordinary responses and terminal stream snapshots.
+	if err := d.openaiTools(m); err != nil {
+		return err
+	}
 	if err := d.str(m, "output_text", path, false); err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package restore
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 )
@@ -29,8 +30,12 @@ func (f Frame) Render(data []byte) []byte {
 }
 
 type Framer struct {
-	Limit                     int
-	Mode                      string
+	Limit int
+	Mode  string
+	// CPA translators also deliver complete SSE records with no terminating
+	// newline. Enable this only at that hook boundary, not for a raw SSE byte
+	// transport. Incomplete JSON still waits for later chunks.
+	Records                   bool
 	buffer                    []byte
 	scan, depth               int
 	inString, escape, started bool
@@ -42,6 +47,16 @@ func (f *Framer) Abort()        { f.buffer = nil; f.scan = 0; f.depth = 0; f.clo
 func (f *Framer) Push(chunk []byte) ([]Frame, error) {
 	if f.closed && len(bytes.TrimSpace(chunk)) > 0 {
 		return nil, errors.New("stream_after_envelope_end")
+	}
+	if f.Records && len(f.buffer) > 0 && len(chunk) > 0 {
+		// Codex also yields event: and data: as separate newline-free
+		// records. Join a buffered metadata line to the next field record.
+		last := f.buffer[bytes.LastIndexByte(f.buffer, '\n')+1:]
+		metadata := bytes.HasPrefix(last, []byte("event:")) || bytes.HasPrefix(last, []byte("id:")) || bytes.HasPrefix(last, []byte("retry:"))
+		field := bytes.HasPrefix(chunk, []byte("data:")) || bytes.HasPrefix(chunk, []byte("event:")) || bytes.HasPrefix(chunk, []byte("id:")) || bytes.HasPrefix(chunk, []byte("retry:"))
+		if metadata && field {
+			f.buffer = append(f.buffer, '\n')
+		}
 	}
 	f.buffer = append(f.buffer, chunk...)
 	if f.Mode == "" {
@@ -182,6 +197,15 @@ func (f *Framer) Push(chunk []byte) ([]Frame, error) {
 	}
 	if len(f.buffer) > f.Limit {
 		return nil, errors.New("event_size_limit")
+	}
+	trimmed := bytes.TrimSpace(f.buffer)
+	if f.Records && f.Mode == "sse" && len(trimmed) > 0 && (trimmed[len(trimmed)-1] == '}' || trimmed[len(trimmed)-1] == ']') && f.buffer[len(f.buffer)-1] != '\n' {
+		candidate := parseSSE(f.buffer)
+		if candidate.HasData && (json.Valid(candidate.Data) || bytes.Equal(bytes.TrimSpace(candidate.Data), []byte("[DONE]"))) {
+			frames = append(frames, candidate)
+			f.buffer = nil
+			f.scan = 0
+		}
 	}
 	if len(f.buffer) == 0 {
 		f.buffer = nil

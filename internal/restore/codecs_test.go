@@ -208,3 +208,22 @@ func TestJSONAndArrayFraming(t *testing.T) {
 		t.Fatal("trailing stream array comma accepted")
 	}
 }
+
+func TestHostSSERecordsAndRawTransportAreDistinct(t *testing.T) {
+	for _, raw := range []string{`data: {"delta":"value"}`, "event: step.stop\ndata: {\"event_type\":\"step.stop\"}", `data: [DONE]`} {
+		f := &Framer{Limit: 1024, Records: true}
+		frames, err := f.Push([]byte(raw))
+		if err != nil || len(frames) != 1 || f.Buffered() != 0 {
+			t.Fatalf("record: %v %+v", err, frames)
+		}
+		f = &Framer{Limit: 1024}
+		frames, err = f.Push([]byte(raw))
+		if err != nil || len(frames) != 0 {
+			t.Fatal("raw SSE was prematurely dispatched")
+		}
+		frames, err = f.Push([]byte("\nid: trailing-id\n\n"))
+		if err != nil || len(frames) != 1 || !bytes.Contains(frames[0].Render(frames[0].Data), []byte("trailing-id")) {
+			t.Fatal("raw transport lost metadata after data")
+		}
+	}
+}
