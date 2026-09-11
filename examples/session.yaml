@@ -1,0 +1,25 @@
+# Merge this plugin configuration into plugins.configs.cpa-vibeguard.
+preserve_marker_hint: true
+session:
+  identity: caller_scope
+  on_missing: request
+  max_id_bytes: 1024
+  ttl: 30m
+  max_sessions: 1024
+  max_entries_per_session: 4096
+  max_total_bytes: 67108864
+  profiles:
+    - namespace: upstream-a
+      match:
+        requested_model_prefix: upstream-a/
+      sources:
+        - header: X-Upstream-A-Session
+        - json: /metadata/session_id
+        - metadata: /execution_session_id
+    - namespace: default
+      sources:
+        - header: X-Session-ID
+        - header: X-Conversation-ID
+        - json: /session_id
+        - json: /metadata/session_id
+        - metadata: /execution_session_id

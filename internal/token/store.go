@@ -28,6 +28,7 @@ type entry struct {
 }
 type scope struct {
 	key        string
+	generation uint64
 	persistent bool
 	bySecret   map[string]*entry
 	byMarker   map[string]*entry
@@ -37,13 +38,14 @@ type scope struct {
 	bytes      int
 }
 type Store struct {
-	mu      sync.Mutex
-	scopes  map[string]*scope
-	markers map[string]bool
-	bytes   int
-	closed  bool
-	now     func() time.Time
-	random  io.Reader
+	mu             sync.Mutex
+	scopes         map[string]*scope
+	markers        map[string]bool
+	bytes          int
+	closed         bool
+	now            func() time.Time
+	random         io.Reader
+	nextGeneration uint64
 }
 type Lease struct {
 	store        *Store
@@ -62,14 +64,24 @@ type Stats struct{ Scopes, Sessions, Entries, Bytes, Leases int }
 func NewStore() *Store {
 	return &Store{scopes: make(map[string]*scope), markers: make(map[string]bool), now: time.Now, random: rand.Reader}
 }
+func NewStoreWithClock(now func() time.Time) *Store {
+	s := NewStore()
+	if now != nil {
+		s.now = now
+	}
+	return s
+}
 
 func (s *Store) Acquire(key string, persistent bool, limits Limits) (*Lease, error) {
-	return s.acquire(key, persistent, limits, false)
+	return s.acquire(key, persistent, limits, false, 0)
 }
 func (s *Store) AcquireExisting(key string, limits Limits) (*Lease, error) {
-	return s.acquire(key, true, limits, true)
+	return s.acquire(key, true, limits, true, 0)
 }
-func (s *Store) acquire(key string, persistent bool, limits Limits, existing bool) (*Lease, error) {
+func (s *Store) AcquireGeneration(key string, generation uint64, limits Limits) (*Lease, error) {
+	return s.acquire(key, true, limits, true, generation)
+}
+func (s *Store) acquire(key string, persistent bool, limits Limits, existing bool, generation uint64) (*Lease, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -90,11 +102,15 @@ func (s *Store) acquire(key string, persistent bool, limits Limits, existing boo
 				return nil, errors.New("mapping_capacity")
 			}
 		}
-		c = &scope{key: strings.Clone(key), persistent: persistent, bySecret: make(map[string]*entry), byMarker: make(map[string]*entry), leases: make(map[*Lease]bool), used: s.now(), ttl: limits.TTL, bytes: bytes}
+		s.nextGeneration++
+		c = &scope{key: strings.Clone(key), generation: s.nextGeneration, persistent: persistent, bySecret: make(map[string]*entry), byMarker: make(map[string]*entry), leases: make(map[*Lease]bool), used: s.now(), ttl: limits.TTL, bytes: bytes}
 		s.scopes[key] = c
 		s.bytes += bytes
 	} else if c.persistent != persistent {
 		return nil, errors.New("mapping_scope_conflict")
+	}
+	if generation != 0 && c.generation != generation {
+		return nil, errors.New("session_mapping_expired")
 	}
 	l := &Lease{store: s, scope: c, limits: limits, transactions: make(map[*Transaction]bool)}
 	c.leases[l] = true
@@ -264,6 +280,7 @@ func (l *Lease) Lookup(marker string) (string, bool) {
 }
 func (l *Lease) Restore(text string) string { return Rewrite(text, l.Lookup) }
 func (l *Lease) Key() string                { return l.scope.key }
+func (l *Lease) Generation() uint64         { return l.scope.generation }
 func (l *Lease) Persistent() bool           { return l.scope.persistent }
 func (l *Lease) Release()                   { s := l.store; s.mu.Lock(); defer s.mu.Unlock(); l.release() }
 func (l *Lease) release() {
@@ -290,6 +307,13 @@ func (s *Store) Stats() Stats {
 		stats.Leases += len(c.leases)
 	}
 	return stats
+}
+func (s *Store) Live(key string, generation uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prune()
+	c := s.scopes[key]
+	return !s.closed && c != nil && c.generation == generation
 }
 func (s *Store) Close() {
 	s.mu.Lock()

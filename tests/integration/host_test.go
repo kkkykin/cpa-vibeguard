@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -227,5 +228,38 @@ func TestHostProtectedChatAndLegacy(t *testing.T) {
 		if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
 			t.Fatalf("%s: %d %s", tc.path, status, raw)
 		}
+	}
+}
+
+func TestHostSessionHistoricalPrefix(t *testing.T) {
+	var mu sync.Mutex
+	var histories [][]json.RawMessage
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct{ Messages []json.RawMessage }
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			w.WriteHeader(400)
+			return
+		}
+		mu.Lock()
+		histories = append(histories, request.Messages)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":"fixture","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+	}))
+	defer upstream.Close()
+	h := startHost(t, upstream.URL, "      rule_sources: [{inline: {extend: {useDefault: false}, rules: [{id: fixture, regex: PRIVATE}]}}]\n      session:\n        profiles:\n          - namespace: fixture\n            sources: [{json: /metadata/session_id}]")
+	for _, body := range []string{
+		`{"model":"fixture-chat","metadata":{"session_id":"same"},"messages":[{"role":"user","content":"PRIVATE"}]}`,
+		`{"model":"fixture-chat","metadata":{"session_id":"same"},"messages":[{"role":"user","content":"PRIVATE"},{"role":"user","content":"PRIVATE again"}]}`,
+	} {
+		if status, raw := post(t, h.url+"/v1/chat/completions", body, false); status != 200 {
+			t.Fatalf("session request: %d %s", status, raw)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(histories) != 2 || !bytes.Equal(histories[0][0], histories[1][0]) || bytes.Contains(histories[0][0], []byte("PRIVATE")) {
+		t.Fatalf("redacted history prefix not stable: %s", histories)
 	}
 }

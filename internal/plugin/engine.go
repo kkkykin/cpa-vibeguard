@@ -12,6 +12,7 @@ import (
 	"github.com/kkkykin/cpa-vibeguard/internal/config"
 	"github.com/kkkykin/cpa-vibeguard/internal/protocol"
 	"github.com/kkkykin/cpa-vibeguard/internal/rules"
+	"github.com/kkkykin/cpa-vibeguard/internal/session"
 	"github.com/kkkykin/cpa-vibeguard/internal/token"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
@@ -43,6 +44,7 @@ type requestState struct {
 	degraded  bool
 	ctx       context.Context
 	cancel    context.CancelFunc
+	selection session.Selection
 }
 type counters struct{ header, unknown, requestError, rejected, protected, degraded atomic.Uint64 }
 type Stats struct {
@@ -58,10 +60,12 @@ type Engine struct {
 	closed   bool
 	metrics  counters
 	mappings *token.Store
+	sessions *session.Resolver
 }
 
 func New() *Engine {
-	return &Engine{requests: make(map[string]*requestState), mappings: token.NewStore()}
+	store := token.NewStore()
+	return &Engine{requests: make(map[string]*requestState), mappings: store, sessions: session.New(store)}
 }
 
 // Configure builds a complete candidate before publishing. In-flight requests
@@ -147,19 +151,15 @@ func (e *Engine) prepare(s *requestState, req pluginapi.RequestInterceptRequest)
 		}
 		return e.requestError(s, "invalid_request_body")
 	}
-	if cfg.Session != nil || len(doc.Previous) > 0 {
-		return e.requestError(s, "session_not_available")
-	}
 	bound, err := s.config.rules.Bind(rules.Input{Headers: req.Headers, JSON: doc.Root, Metadata: req.Metadata})
 	if err != nil {
 		return e.requestError(s, "variable_binding_failed")
 	}
-	limits := token.Defaults()
-	limits.MaxScopes = limits.MaxSessions + cfg.Limits.MaxInflight
-	lease, err := e.mappings.Acquire("request:"+req.RequestID, false, limits)
+	selection, err := e.sessions.Resolve(cfg, session.Input{RequestID: req.RequestID, SourceFormat: req.SourceFormat, RequestedModel: req.RequestedModel, Headers: req.Headers, JSON: doc.Root, Metadata: req.Metadata, Previous: doc.Previous})
 	if err != nil {
-		return e.requestError(s, "mapping_capacity")
+		return e.requestError(s, "session_resolution_failed")
 	}
+	lease := selection.Lease
 	committed := false
 	defer func() {
 		if !committed {
@@ -213,6 +213,7 @@ func (e *Engine) prepare(s *requestState, req pluginapi.RequestInterceptRequest)
 	}
 	s.body = body
 	s.lease = lease
+	s.selection = selection
 	s.decision = protected
 	committed = true
 	e.metrics.protected.Add(1)
@@ -309,6 +310,9 @@ func (e *Engine) Response(req pluginapi.ResponseInterceptRequest) pluginapi.Resp
 	if err != nil || len(body) > cfg.Limits.ResponseBytes {
 		return fail()
 	}
+	if err := e.sessions.Record(s.selection, doc.ResponseIDs); err != nil {
+		return fail()
+	}
 	return pluginapi.ResponseInterceptResponse{Body: body}
 }
 func (e *Engine) degrade(s *requestState) {
@@ -339,6 +343,7 @@ func (e *Engine) Complete(id string) {
 		s.lease.Release()
 		s.lease = nil
 	}
+	s.selection = session.Selection{}
 }
 func (e *Engine) Quiesce() { e.mu.Lock(); defer e.mu.Unlock(); e.quiesced = true }
 func (e *Engine) Close() {
@@ -359,9 +364,11 @@ func (e *Engine) Close() {
 			s.lease.Release()
 			s.lease = nil
 		}
+		s.selection = session.Selection{}
 		s.mu.Unlock()
 	}
 	e.mappings.Close()
+	e.sessions.Close()
 }
 func (e *Engine) Stats() Stats {
 	e.mu.Lock()

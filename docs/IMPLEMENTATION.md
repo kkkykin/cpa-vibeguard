@@ -16,7 +16,8 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Request scope integration, atomic request-error rollback, sticky retries, ordinary-response restoration, and response degradation. All paired fixtures pass through the real C ABI; unmodified host Chat and legacy Completions redact before upstream and restore after execution (`TestHostProtectedChatAndLegacy`).
    - [ ] Host coverage for the remaining formats and native/cross-format routes; session/stream coverage follows below.
 4. Sessions and multi-turn requests
-   - [ ] Ordered sources, identity isolation, leases, history references, capacity, and idempotence.
+   - [x] Ordered profiles and header/JSON/metadata sources, trusted identity/namespace isolation, leases, history reference registration, generation-aware expiry, capacity, and retry idempotence (`internal/session`, plugin/session tests).
+   - [x] Unchanged history prefixes remain stable across source switches, concurrent requests, and rule-disable reconfiguration. Real CPA authenticated multi-turn prefix stability passes `TestHostSessionHistoricalPrefix`; no claim is made about real upstream cache hits.
 5. Streaming and WebSocket
    - [ ] Field deltas, tool JSON, snapshots, terminal events, bounded framing, abnormal stream cleanup, and WebSocket host tests.
 6. Release verification and documentation
