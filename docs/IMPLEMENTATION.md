@@ -19,6 +19,7 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Ordered profiles and header/JSON/metadata sources, trusted identity/namespace isolation, leases, history reference registration, generation-aware expiry, capacity, and retry idempotence (`internal/session`, plugin/session tests).
    - [x] Unchanged history prefixes remain stable across source switches, concurrent requests, and rule-disable reconfiguration. Real CPA authenticated multi-turn prefix stability passes `TestHostSessionHistoricalPrefix`; no claim is made about real upstream cache hits.
 5. Streaming and WebSocket
+   - [x] Bounded text tails, incremental tool JSON values (keys preserved), and SSE/JSON/array framing. `go test -race ./internal/restore` covers every marker/SSE split, UTF-8/escapes, normal and abnormal tails, duplicate tool keys, and buffer limits. Protocol stream hooks are still pending.
    - [ ] Field deltas, tool JSON, snapshots, terminal events, bounded framing, abnormal stream cleanup, and WebSocket host tests.
 6. Release verification and documentation
    - [ ] Full tests, race, vet, shared-library/host tests, reconfiguration/restart/replacement, benchmarks, and observed coverage matrix.
