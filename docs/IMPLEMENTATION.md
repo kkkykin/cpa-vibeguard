@@ -6,6 +6,7 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Strict configuration defaults, types, duplicate members, JSON Pointer syntax, and header conditions (`internal/config`, `internal/document`). Verified with `go test ./internal/document ./internal/config`.
    - [x] Native ABI, four capabilities, lifecycle, bounded request state, and sticky bypass. Verified with `go test -race ./...`, `go vet ./...`, `make build`, and `TestNativeABI`.
    - [x] Unmodified pinned CPA loads and registers the shared library; Chat JSON/SSE bypass round trips and successful-envelope business rejection are verified by `TestHostLifecycle` (including asynchronous capacity release).
+   - [x] The actual example Caddy routing is exercised with Caddy v2.10.2: prefix stripping/header injection, removal of a client-supplied skip header on the normal path, JSON/SSE bypass, marker preservation, and unchanged CPA authentication (`TestCaddyPrefixAndHeaderBoundary`).
    - [ ] Full entrypoint inventory and recorded fixtures.
 2. Rule engine
    - [x] Unified TOML/YAML/inline documents, official defaults, field-preserving merges, disable unions, literal variable binding, bounded compilation cache, dynamic allowlists, and exact Gitleaks spans (`internal/rules`). `go test -race ./internal/rules ./internal/plugin`, `go vet ./...`, native build, and host integration tests pass.

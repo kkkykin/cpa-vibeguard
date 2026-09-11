@@ -17,4 +17,5 @@ check: test race vet build
 
 integration: build
 	bash scripts/build-host.sh
+	bash scripts/build-caddy.sh
 	go test -tags=integration -count=1 ./tests/integration/...
