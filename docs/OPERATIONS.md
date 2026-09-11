@@ -28,7 +28,7 @@ Responses 的 `previous_response_id` 和 Interactions 的 `previous_interaction_
 
 上游 EOF、错误或客户端取消没有正常结束事件时，丢弃尚未输出的候选尾部、未完成事件和工具解析缓冲，保留已经交付的内容。`request.complete` 只做幂等清理与释放 lease，不返回正文；宿主外层合成的 `[DONE]` 不保证再次经过插件。47 字节只描述普通文本的标记尾部，SSE、JSON 转义和工具参数另有缓冲与限额。
 
-Responses WebSocket 已验证原生 upstream WS 和显式 `websockets: false` 的 HTTP execution 两种路径。每轮仍走 Responses 执行钩子；要复用插件映射，须显式配置 `metadata: /execution_session_id` 或稳定 header/JSON session 来源。固定宿主会在插件之前以 409 `previous_response_not_found` 拒绝跨连接历史引用。HTTP execution 的静默上游在客户端 WS 断开后，宿主可能等到下一次写入、keepalive 或上游完成才观察到断连；这段期间活动 lease 仍保留。测试在后续写入后验证取消与清理，不依赖 TTL 淘汰活动请求。未承诺任意 upstream WS upgrade 错误都能透明回退 HTTP。
+Responses WebSocket 已验证原生 upstream WS 和显式 `websockets: false` 的 HTTP execution 两种路径。每轮仍走 Responses 执行钩子；要复用插件映射，须显式配置 `metadata: /execution_session_id` 或稳定 header/JSON session 来源。固定宿主会在插件之前以 409 `previous_response_not_found` 拒绝跨连接历史引用。两种上游模式都存在静默流边界：客户端 WS 断开后，宿主可能等到下一次写入、keepalive 或上游完成才观察到断连；这段期间活动 lease 仍保留。测试先观察 429，再由上游发送进度事件，验证取消与清理，不依赖 TTL 淘汰活动请求。未承诺任意 upstream WS upgrade 错误都能透明回退 HTTP。
 
 **请求与响应故障。**
 

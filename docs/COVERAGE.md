@@ -26,7 +26,7 @@
 
 普通/流式 fixture 覆盖中文、换行、引号、反斜杠、超过 2^53 的整数、并行输出和工具、opaque 数据。主要对话流在全部 49 个标记拆分位置验证；也覆盖工具参数逐字节增量、SSE 拆帧、usage、正常尾部和异常 EOF。计数依据脱敏内容，48 字节标记及可选提示会改变 token 数，不能当作原文计数。
 
-**Responses WebSocket。** 两条路径 `/v1/responses` 和 `/backend-api/codex/responses` 都验证了同连接两轮文本/工具调用、连接隔离、取消和正常残缺尾部。覆盖原生 upstream WS 与配置 `websockets: false` 后的 HTTP execution；前者钩子收到裸 JSON，后者收到 SSE。插件使用显式的 execution_session_id 来源固定映射；握手本身不属于文本适配。固定宿主的跨连接 history 409 和静默 HTTP fallback 断连延迟见 [OPERATIONS.md](OPERATIONS.md)。
+**Responses WebSocket。** 两条路径 `/v1/responses` 和 `/backend-api/codex/responses` 都验证了同连接两轮文本/工具调用、连接隔离和正常残缺尾部；断连清理在 `/v1/responses` 上验证两种执行模式。覆盖原生 upstream WS 与配置 `websockets: false` 后的 HTTP execution；前者钩子收到裸 JSON，后者收到 SSE。插件使用显式的 execution_session_id 来源固定映射；握手本身不属于文本适配。固定宿主的跨连接 history 409 和两种上游模式的静默流断连延迟见 [OPERATIONS.md](OPERATIONS.md)。
 
 **图片、视频和搜索。**
 

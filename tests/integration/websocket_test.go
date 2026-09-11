@@ -235,12 +235,46 @@ func TestHostWebSocketDisconnectReleasesRequest(t *testing.T) {
 						events := responseEvents(marker, "resp_cancel")
 						if pause.Swap(false) {
 							for _, event := range events[:3] {
-								c.WriteJSON(event)
+								if err := c.WriteJSON(event); err != nil {
+									t.Error(err)
+									return
+								}
 							}
-							c.SetReadDeadline(time.Now().Add(10 * time.Second))
-							_, _, _ = c.ReadMessage()
-							canceled <- struct{}{}
-							return
+							// The downstream handler reads the next client message
+							// only after this turn ends, for either upstream mode.
+							// Observe a real peer close; a fixture read deadline or
+							// local cleanup must not count as host cancellation.
+							disconnected := make(chan error, 1)
+							go func() {
+								_, _, err := c.ReadMessage()
+								disconnected <- err
+							}()
+							select {
+							case <-stop:
+								return
+							case <-resume:
+							}
+							ticker := time.NewTicker(20 * time.Millisecond)
+							defer ticker.Stop()
+							for {
+								select {
+								case <-stop:
+									return
+								case err := <-disconnected:
+									if err == nil {
+										t.Error("unexpected request on disconnected upstream WebSocket")
+										return
+									}
+									canceled <- struct{}{}
+									return
+								case <-ticker.C:
+									if err := c.WriteJSON(map[string]any{"type": "response.in_progress", "response": map[string]any{"id": "resp_cancel", "status": "in_progress"}}); err != nil {
+										// Wait for the concurrent reader's peer-close
+										// observation instead of closing it ourselves.
+										ticker.Stop()
+									}
+								}
+							}
 						}
 						for _, event := range events {
 							if c.WriteJSON(event) != nil {
@@ -265,8 +299,8 @@ func TestHostWebSocketDisconnectReleasesRequest(t *testing.T) {
 						return
 					case <-resume:
 					}
-					// HTTP fallback has no concurrent downstream reader while
-					// forwarding. Force writes so CPA can observe the disconnect;
+					// CPA has no concurrent downstream reader while forwarding.
+					// Force writes so it can observe the disconnect;
 					// without data/keepalives/completion the lease stays active.
 					ticker := time.NewTicker(20 * time.Millisecond)
 					defer ticker.Stop()
@@ -311,13 +345,11 @@ func TestHostWebSocketDisconnectReleasesRequest(t *testing.T) {
 				}
 			}
 			c.Close()
-			if !native {
-				// The hijacked WebSocket request context has not been canceled
-				// just because the client closed its socket. Keep active leases.
-				status, raw := post(t, h.url+"/v1/responses", `{"model":"fixture-ws","input":"PRIVATE"}`, false)
-				if status != 429 || !bytes.Contains(raw, []byte("inflight_limit")) {
-					t.Fatalf("silent fallback unexpectedly completed: %d %s", status, raw)
-				}
+			// Both native and HTTP-backed turns retain their lease until a
+			// write or completion reveals the closed downstream connection.
+			status, raw := post(t, h.url+"/v1/responses", `{"model":"fixture-ws","input":"PRIVATE"}`, false)
+			if status != 429 || !bytes.Contains(raw, []byte("inflight_limit")) {
+				t.Fatalf("silent WebSocket execution unexpectedly completed: %d %s", status, raw)
 			}
 			close(resume)
 			deadline := time.Now().Add(5 * time.Second)
