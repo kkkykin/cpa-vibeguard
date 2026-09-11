@@ -50,6 +50,7 @@ func compatibilityProviders(upstream string) string {
 type hostSettings struct {
 	Providers, PluginConfig, PluginDir, Extra string
 	Env                                       []string
+	RequestRetry                              int
 }
 
 func startHostConfigured(t *testing.T, settings hostSettings) *hostProcess {
@@ -81,7 +82,7 @@ auth-dir: %q
 api-keys: [fixture-client]
 commercial-mode: true
 disable-cooling: true
-request-retry: 0
+request-retry: %d
 disable-claude-cloak-mode: true
 remote-management:
   disable-control-panel: true
@@ -94,7 +95,7 @@ plugins:
 %s
 %s
 %s
-`, port, filepath.Join(dir, "auths"), pluginDir, settings.PluginConfig, settings.Providers, settings.Extra)
+`, port, filepath.Join(dir, "auths"), settings.RequestRetry, pluginDir, settings.PluginConfig, settings.Providers, settings.Extra)
 	configPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
 		t.Fatal(err)
