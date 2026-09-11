@@ -240,7 +240,7 @@ func TestHostNativeAndCrossProtocolMatrix(t *testing.T) {
 		w.Write(maskedResponse(t, fixtures[name], marker))
 	}))
 	defer upstream.Close()
-	h := startHostConfigured(t, hostSettings{Providers: nativeProviders(upstream.URL), PluginConfig: hostRule})
+	h, probe := startProbedHost(t, hostSettings{Providers: nativeProviders(upstream.URL), PluginConfig: hostRule}, false)
 	ordinary := []struct{ name, path, model, fixture string }{
 		{"claude", "/v1/messages", "native-claude", "claude"},
 		{"gemini", "/v1beta/models/native-gemini:generateContent", "", "gemini"},
@@ -258,6 +258,7 @@ func TestHostNativeAndCrossProtocolMatrix(t *testing.T) {
 	}
 	for _, tc := range ordinary {
 		t.Run(tc.name, func(t *testing.T) {
+			start := probe.mark(t)
 			before := calls.Load()
 			status, raw := post(t, h.url+tc.path, fixtureRequest(t, fixtures[tc.fixture].Request, tc.model, false), false)
 			if status != 200 {
@@ -291,6 +292,7 @@ func TestHostNativeAndCrossProtocolMatrix(t *testing.T) {
 			} else if !bytes.Contains(raw, []byte("PRIVATE")) {
 				t.Fatal("missing restored response text")
 			}
+			probe.verify(t, "matrix/"+tc.name, start, fixtures[tc.fixture].Format)
 		})
 	}
 	streamTests := []struct{ name, path, model, format string }{
@@ -308,6 +310,10 @@ func TestHostNativeAndCrossProtocolMatrix(t *testing.T) {
 	for _, tc := range streamTests {
 		t.Run(tc.name, func(t *testing.T) {
 			for n := 0; n <= token.Length; n++ {
+				start := 0
+				if n == 0 {
+					start = probe.mark(t)
+				}
 				split.Store(int64(n))
 				status, raw := post(t, h.url+tc.path, fixtureRequest(t, streams[tc.format].Request, tc.model, true), false)
 				if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
@@ -318,6 +324,9 @@ func TestHostNativeAndCrossProtocolMatrix(t *testing.T) {
 					t.Fatalf("no SSE output: %s", raw)
 				}
 				assertStreamText(t, tc.format, events)
+				if n == 0 {
+					probe.verify(t, "matrix/"+tc.name, start, tc.format)
+				}
 			}
 		})
 	}
@@ -461,13 +470,16 @@ func TestHostClaudeNativeCountAndLocalCount(t *testing.T) {
     base-url: %q
     models: [{name: claude-sonnet-4-5, alias: count-local}]
 `, proxy.URL, proxy.URL)
-	h := startHostConfigured(t, hostSettings{Providers: providers, PluginConfig: hostRule + "\n      bypass: {headers: [{name: X-Vibeguard-Skip, value: 'true'}]}", Env: []string{"SSL_CERT_FILE=" + certPath}})
+	h, probe := startProbedHost(t, hostSettings{Providers: providers, PluginConfig: hostRule + "\n      bypass: {headers: [{name: X-Vibeguard-Skip, value: 'true'}]}", Env: []string{"SSL_CERT_FILE=" + certPath}}, false)
+	start := probe.mark(t)
 	status, raw := post(t, h.url+"/v1/messages/count_tokens", `{"model":"count-native","messages":[{"role":"user","content":"PRIVATE"}]}`, false)
 	if status != 200 || !bytes.Contains(raw, []byte("42")) || upstreamCalls.Load() != 1 {
 		t.Fatalf("native count %d %s calls=%d", status, raw, upstreamCalls.Load())
 	}
+	probe.verify(t, "count/claude-native", start, "claude")
 	counts := make([]int, 2)
 	for i, skip := range []bool{false, true} {
+		start = probe.mark(t)
 		status, raw = post(t, h.url+"/v1/messages/count_tokens", `{"model":"count-local","messages":[{"role":"user","content":"PRIVATE"}]}`, skip)
 		var result struct {
 			InputTokens int `json:"input_tokens"`
@@ -477,6 +489,7 @@ func TestHostClaudeNativeCountAndLocalCount(t *testing.T) {
 		if status != 200 || result.InputTokens <= 0 {
 			t.Fatalf("local count %d %s", status, raw)
 		}
+		probe.verify(t, "count/claude-local-"+fmt.Sprint(skip), start, "claude")
 	}
 	if upstreamCalls.Load() != 1 || counts[0] <= counts[1] {
 		t.Fatalf("local counter did not see marker expansion: %v calls=%d", counts, upstreamCalls.Load())

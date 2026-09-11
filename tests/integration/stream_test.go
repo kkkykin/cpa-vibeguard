@@ -75,9 +75,13 @@ func TestHostProtectedChatStreamsEverySplit(t *testing.T) {
 		fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
 	defer upstream.Close()
-	h := startHost(t, upstream.URL, hostRule)
+	h, probe := startProbedHost(t, hostSettings{Providers: compatibilityProviders(upstream.URL), PluginConfig: hostRule}, false)
 	for _, path := range []string{"/v1/chat/completions", "/v1/completions"} {
 		for split := 0; split <= token.Length; split++ {
+			start := 0
+			if split == 0 {
+				start = probe.mark(t)
+			}
 			body := fmt.Sprintf(`{"model":"fixture-chat","messages":[{"role":"user","content":"PRIVATE"}],"stream":true,"metadata":{"split":%d}}`, split)
 			if path == "/v1/completions" {
 				body = fmt.Sprintf(`{"model":"fixture-chat","prompt":"PRIVATE","stream":true,"metadata":{"split":%d}}`, split)
@@ -101,6 +105,9 @@ func TestHostProtectedChatStreamsEverySplit(t *testing.T) {
 			}
 			if content[0] != "sent PRIVATE" || content[1] != "PRIVATE" {
 				t.Fatalf("%s split %d: %v %s", path, split, content, raw)
+			}
+			if split == 0 {
+				probe.verify(t, path+"/stream", start, "openai")
 			}
 		}
 	}

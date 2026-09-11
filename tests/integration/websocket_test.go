@@ -143,12 +143,13 @@ func TestHostResponsesWebSocketNativeAndFallback(t *testing.T) {
 				}
 			}))
 			defer upstream.Close()
-			h := startHostConfigured(t, hostSettings{Providers: websocketProviders(upstream.URL, native), PluginConfig: hostRule + websocketSession})
+			h, probe := startProbedHost(t, hostSettings{Providers: websocketProviders(upstream.URL, native), PluginConfig: hostRule + websocketSession}, false)
 			var connectionMarkers []string
 			for _, path := range []string{"/v1/responses", "/backend-api/codex/responses"} {
 				c := dialWS(t, h.url+path)
 				previous, firstMarker := "", ""
 				for turn := 0; turn < 2; turn++ {
+					start := probe.mark(t)
 					if err := c.WriteJSON(wsTurn(previous)); err != nil {
 						t.Fatal(err)
 					}
@@ -175,12 +176,14 @@ func TestHostResponsesWebSocketNativeAndFallback(t *testing.T) {
 					} else if marker != firstMarker {
 						t.Fatal("execution_session_id did not preserve multi-turn markers")
 					}
+					probe.verify(t, fmt.Sprintf("websocket/%v%s/turn-%d", native, path, turn), start, "openai-response")
 				}
 				connectionMarkers = append(connectionMarkers, firstMarker)
 				c.Close()
 				// CPA rejects cross-connection references before entering the
 				// plugin. This is a host boundary, not a plugin business error.
 				other := dialWS(t, h.url+path)
+				start := probe.mark(t)
 				before := turns.Load()
 				if err := other.WriteJSON(wsTurn(previous)); err != nil {
 					t.Fatal(err)
@@ -190,6 +193,7 @@ func TestHostResponsesWebSocketNativeAndFallback(t *testing.T) {
 				if err != nil || !bytes.Contains(raw, []byte("previous_response_not_found")) || turns.Load() != before {
 					t.Fatalf("cross-connection continuation: %v %s", err, raw)
 				}
+				probe.noRequest(t, start)
 			}
 			if connectionMarkers[0] == connectionMarkers[1] {
 				t.Fatal("separate websocket sessions shared markers")

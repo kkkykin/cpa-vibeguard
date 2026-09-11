@@ -1,0 +1,1467 @@
+[
+  {
+    "name": "/openai/v1/videos",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/openai/v1/videos",
+    "request_shape": "json-object",
+    "request_keys": [
+      "aspect_ratio",
+      "duration",
+      "model",
+      "prompt",
+      "resolution"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/chat/completions",
+    "source_format": "openai",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/chat/completions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/chat/completions/stream",
+    "source_format": "openai",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/chat/completions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "metadata",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/completions",
+    "source_format": "openai",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/completions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/completions/stream",
+    "source_format": "openai",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/completions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/videos",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/v1/videos",
+    "request_shape": "json-object",
+    "request_keys": [
+      "duration",
+      "model",
+      "prompt",
+      "video"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/videos/edits",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/v1/videos/edits",
+    "request_shape": "json-object",
+    "request_keys": [
+      "duration",
+      "model",
+      "prompt",
+      "video"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/videos/extensions",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/v1/videos/extensions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "duration",
+      "model",
+      "prompt",
+      "video"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "/v1/videos/generations",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/v1/videos/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "duration",
+      "model",
+      "prompt",
+      "video"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "count/claude-local-false",
+    "source_format": "claude",
+    "to_formats": [
+      "claude"
+    ],
+    "path": "/v1/messages/count_tokens",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "count/claude-local-true",
+    "source_format": "claude",
+    "to_formats": [
+      "claude"
+    ],
+    "path": "/v1/messages/count_tokens",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "count/claude-native",
+    "source_format": "claude",
+    "to_formats": [
+      "claude"
+    ],
+    "path": "/v1/messages/count_tokens",
+    "request_shape": "json-object",
+    "request_keys": [
+      "messages",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/fixture-image/edit/false",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/edits",
+    "request_shape": "json-object",
+    "request_keys": [
+      "image",
+      "model",
+      "prompt"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/fixture-image/edit/true",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/edits",
+    "request_shape": "multipart",
+    "request_keys": null,
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/fixture-image/generate/false",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "model",
+      "prompt",
+      "response_format"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/fixture-image/generate/true",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "model",
+      "prompt",
+      "response_format",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/gpt-image-2/edit/false",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/edits",
+    "request_shape": "json-object",
+    "request_keys": [
+      "image",
+      "model",
+      "prompt"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/gpt-image-2/edit/true",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/edits",
+    "request_shape": "multipart",
+    "request_keys": null,
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/gpt-image-2/generate/false",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "model",
+      "prompt",
+      "response_format"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/gpt-image-2/generate/true",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "model",
+      "prompt",
+      "response_format",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/grok-imagine-image/edit/false",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/edits",
+    "request_shape": "json-object",
+    "request_keys": [
+      "image",
+      "model",
+      "prompt",
+      "response_format"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/grok-imagine-image/edit/true",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/edits",
+    "request_shape": "json-object",
+    "request_keys": [
+      "image",
+      "model",
+      "prompt",
+      "response_format"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/grok-imagine-image/generate/false",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "aspect_ratio",
+      "model",
+      "prompt",
+      "resolution",
+      "response_format"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/grok-imagine-image/generate/true",
+    "source_format": "openai-image",
+    "to_formats": [
+      "openai-image"
+    ],
+    "path": "/v1/images/generations",
+    "request_shape": "json-object",
+    "request_keys": [
+      "aspect_ratio",
+      "model",
+      "prompt",
+      "resolution",
+      "response_format"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "images/responses",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/chat-gemini",
+    "source_format": "openai",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1/chat/completions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "max_tokens",
+      "messages",
+      "model",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/chat-gemini-stream",
+    "source_format": "openai",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1/chat/completions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "max_tokens",
+      "messages",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/claude",
+    "source_format": "claude",
+    "to_formats": [
+      "claude"
+    ],
+    "path": "/v1/messages",
+    "request_shape": "json-object",
+    "request_keys": [
+      "max_tokens",
+      "messages",
+      "model",
+      "system",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/claude-chat",
+    "source_format": "claude",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/messages",
+    "request_shape": "json-object",
+    "request_keys": [
+      "max_tokens",
+      "messages",
+      "model",
+      "system",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/claude-chat-stream",
+    "source_format": "claude",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/messages",
+    "request_shape": "json-object",
+    "request_keys": [
+      "max_tokens",
+      "messages",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/claude-stream",
+    "source_format": "claude",
+    "to_formats": [
+      "claude"
+    ],
+    "path": "/v1/messages",
+    "request_shape": "json-object",
+    "request_keys": [
+      "max_tokens",
+      "messages",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/codex-alias",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/backend-api/codex/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "instructions",
+      "model",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/codex-alias-stream",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/backend-api/codex/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/compact",
+    "source_format": "openai-response",
+    "to_formats": [
+      "openai-response"
+    ],
+    "path": "/v1/responses/compact",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/compact-alias",
+    "source_format": "openai-response",
+    "to_formats": [
+      "openai-response"
+    ],
+    "path": "/backend-api/codex/responses/compact",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/compact-compatible",
+    "source_format": "openai-response",
+    "to_formats": [
+      "openai-response"
+    ],
+    "path": "/v1/responses/compact",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/gemini",
+    "source_format": "gemini",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1beta/models/*action",
+    "request_shape": "json-object",
+    "request_keys": [
+      "contents",
+      "systemInstruction",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/gemini-alt-sse",
+    "source_format": "gemini",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1beta/models/*action",
+    "request_shape": "json-object",
+    "request_keys": [
+      "contents",
+      "stream"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/gemini-count",
+    "source_format": "gemini",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1beta/models/*action",
+    "request_shape": "json-object",
+    "request_keys": [
+      "generateContentRequest"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/gemini-sse",
+    "source_format": "gemini",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1beta/models/*action",
+    "request_shape": "json-object",
+    "request_keys": [
+      "contents",
+      "stream"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/interactions-gemini",
+    "source_format": "interactions",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1beta/interactions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "system_instruction",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/interactions-gemini-stream",
+    "source_format": "interactions",
+    "to_formats": [
+      "gemini"
+    ],
+    "path": "/v1beta/interactions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/interactions-native",
+    "source_format": "interactions",
+    "to_formats": [
+      "interactions"
+    ],
+    "path": "/v1beta/interactions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "system_instruction",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/interactions-native-stream",
+    "source_format": "interactions",
+    "to_formats": [
+      "interactions"
+    ],
+    "path": "/v1beta/interactions",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/responses-chat",
+    "source_format": "openai-response",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "instructions",
+      "model",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/responses-chat-stream",
+    "source_format": "openai-response",
+    "to_formats": [
+      "openai"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/responses-codex",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "instructions",
+      "model",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "matrix/responses-native-stream",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "unintercepted//backend-api/codex/alpha/search",
+    "source_format": "",
+    "to_formats": null,
+    "path": "/backend-api/codex/alpha/search",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "unintercepted//healthz",
+    "source_format": "",
+    "to_formats": null,
+    "path": "/healthz",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "unintercepted//v0/management/config",
+    "source_format": "",
+    "to_formats": null,
+    "path": "/v0/management/config",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "unintercepted//v1/alpha/search",
+    "source_format": "",
+    "to_formats": null,
+    "path": "/v1/alpha/search",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "unintercepted//v1/models",
+    "source_format": "",
+    "to_formats": null,
+    "path": "/v1/models",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "unintercepted//v1beta/models",
+    "source_format": "",
+    "to_formats": null,
+    "path": "/v1beta/models",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "unintercepted/unauthenticated/v1/chat/completions",
+    "source_format": "",
+    "to_formats": null,
+    "path": "unauthenticated/v1/chat/completions",
+    "request_shape": "",
+    "request_keys": null,
+    "response_shapes": null,
+    "hooks": null
+  },
+  {
+    "name": "videos/download-metadata",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/openai/v1/videos/:video_id/content",
+    "request_shape": "json-object",
+    "request_keys": [
+      "request_id"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "videos/poll/request",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/v1/videos/:request_id",
+    "request_shape": "json-object",
+    "request_keys": [
+      "request_id"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "videos/poll/session",
+    "source_format": "openai-video",
+    "to_formats": [
+      "openai-video"
+    ],
+    "path": "/v1/videos/:request_id",
+    "request_shape": "json-object",
+    "request_keys": [
+      "request_id"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.intercept_after",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/false/backend-api/codex/responses/turn-0",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/backend-api/codex/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/false/backend-api/codex/responses/turn-1",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/backend-api/codex/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/false/v1/responses/turn-0",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/false/v1/responses/turn-1",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "sse"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/true/backend-api/codex/responses/turn-0",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/backend-api/codex/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/true/backend-api/codex/responses/turn-1",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/backend-api/codex/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "previous_response_id",
+      "stream",
+      "tools",
+      "type"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/true/v1/responses/turn-0",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "stream",
+      "tools"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  },
+  {
+    "name": "websocket/true/v1/responses/turn-1",
+    "source_format": "openai-response",
+    "to_formats": [
+      "codex"
+    ],
+    "path": "/v1/responses",
+    "request_shape": "json-object",
+    "request_keys": [
+      "input",
+      "model",
+      "previous_response_id",
+      "stream",
+      "tools",
+      "type"
+    ],
+    "response_shapes": [
+      "json-object"
+    ],
+    "hooks": [
+      "request.intercept_before",
+      "request.intercept_after",
+      "response.stream_headers",
+      "response.intercept_stream_chunk",
+      "request.complete"
+    ]
+  }
+]

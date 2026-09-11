@@ -32,7 +32,11 @@ type hostProcess struct {
 }
 
 func startHost(t *testing.T, upstream, pluginConfig string) *hostProcess {
-	return startHostConfigured(t, hostSettings{PluginConfig: pluginConfig, Providers: fmt.Sprintf(`openai-compatibility:
+	return startHostConfigured(t, hostSettings{PluginConfig: pluginConfig, Providers: compatibilityProviders(upstream)})
+}
+
+func compatibilityProviders(upstream string) string {
+	return fmt.Sprintf(`openai-compatibility:
   - name: fixture
     base-url: %q
     api-key-entries:
@@ -40,7 +44,7 @@ func startHost(t *testing.T, upstream, pluginConfig string) *hostProcess {
     models:
       - name: fixture-chat
         alias: fixture-chat
-`, upstream+"/v1")})
+`, upstream+"/v1")
 }
 
 type hostSettings struct {
@@ -254,16 +258,36 @@ func TestHostProtectedChatAndLegacy(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "fixture", "object": "chat.completion", "choices": []any{map[string]any{"index": 0, "message": map[string]any{"role": "assistant", "content": request.Messages[0].Content}, "finish_reason": "stop"}}})
 	}))
 	defer upstream.Close()
-	h := startHost(t, upstream.URL, "      rule_sources: [{inline: {extend: {useDefault: false}, rules: [{id: fixture, regex: PRIVATE}]}}]")
+	h, probe := startProbedHost(t, hostSettings{Providers: compatibilityProviders(upstream.URL), PluginConfig: hostRule}, false)
 	for _, tc := range []struct{ path, body string }{
 		{"/v1/chat/completions", `{"model":"fixture-chat","messages":[{"role":"user","content":"PRIVATE"}]}`},
 		{"/v1/completions", `{"model":"fixture-chat","prompt":"PRIVATE"}`},
 	} {
+		start := probe.mark(t)
 		status, raw := post(t, h.url+tc.path, tc.body, false)
 		if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
 			t.Fatalf("%s: %d %s", tc.path, status, raw)
 		}
+		probe.verify(t, tc.path, start, "openai")
 	}
+	for _, path := range []string{"/v1/models", "/v1beta/models", "/healthz", "/v0/management/config"} {
+		start := probe.mark(t)
+		status, _ := requestHTTP(t, "GET", h.url+path, nil, nil)
+		if status != 200 && !(path == "/v0/management/config" && status == 404) {
+			t.Fatalf("non-execution route %s: %d", path, status)
+		}
+		probe.noRequest(t, start, path)
+	}
+	start := probe.mark(t)
+	res, err := http.Post(h.url+"/v1/chat/completions", "application/json", strings.NewReader(`{"model":"fixture-chat","messages":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 401 {
+		t.Fatalf("unauthenticated request: %d", res.StatusCode)
+	}
+	probe.noRequest(t, start, "unauthenticated/v1/chat/completions")
 }
 
 func TestHostSessionHistoricalPrefix(t *testing.T) {

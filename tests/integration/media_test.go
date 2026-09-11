@@ -174,10 +174,11 @@ codex-api-key:
       - {name: gpt-5.4-mini, alias: gpt-5.4-mini}
       - {name: gpt-image-2, alias: gpt-image-2}
 `, upstream.URL+"/compat/v1", upstream.URL+"/xai/v1", upstream.URL+"/codex")
-	h := startHostConfigured(t, hostSettings{Providers: providers, PluginConfig: hostRule + "\n      session:\n        profiles: [{namespace: media, sources: [{header: X-Session-ID}]}]"})
+	h, probe := startProbedHost(t, hostSettings{Providers: providers, PluginConfig: hostRule + "\n      session:\n        profiles: [{namespace: media, sources: [{header: X-Session-ID}]}]"}, false)
 	for _, model := range []string{"fixture-image", "grok-imagine-image", "gpt-image-2"} {
 		for _, stream := range []bool{false, true} {
 			t.Run(model+fmt.Sprint(stream), func(t *testing.T) {
+				start := probe.mark(t)
 				body := fmt.Sprintf(`{"model":%q,"prompt":"PRIVATE","stream":%v,"response_format":"b64_json"}`, model, stream)
 				status, raw := post(t, h.url+"/v1/images/generations", body, false)
 				if status != 200 || bytes.Contains(raw, []byte(token.Prefix)) || !bytes.Contains(raw, []byte(media)) {
@@ -187,10 +188,12 @@ codex-api-key:
 				if !(model == "grok-imagine-image" && stream) && !bytes.Contains(raw, []byte("PRIVATE")) {
 					t.Fatalf("missing revised prompt: %s", raw)
 				}
+				probe.verify(t, "images/"+model+"/generate/"+fmt.Sprint(stream), start, "openai-image")
 			})
 		}
 		for _, upload := range []bool{false, true} {
 			t.Run(model+"-edit-"+fmt.Sprint(upload), func(t *testing.T) {
+				start := probe.mark(t)
 				body := []byte(fmt.Sprintf(`{"model":%q,"prompt":"PRIVATE","image":"data:image/png;base64,%s"}`, model, media))
 				headers := http.Header{}
 				if upload {
@@ -209,43 +212,60 @@ codex-api-key:
 				if status != 200 || bytes.Contains(raw, []byte(token.Prefix)) || !bytes.Contains(raw, []byte(media)) {
 					t.Fatalf("%d %s", status, raw)
 				}
+				probe.verify(t, "images/"+model+"/edit/"+fmt.Sprint(upload), start, "openai-image")
 			})
 		}
 	}
 	// The same image-generation item is also reachable through Responses.
+	start := probe.mark(t)
 	status, raw := post(t, h.url+"/v1/responses", `{"model":"gpt-5.4-mini","input":"PRIVATE","tools":[{"type":"image_generation"}],"stream":true}`, false)
 	if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
 		t.Fatalf("Responses image path: %d %s", status, raw)
 	}
+	probe.verify(t, "images/responses", start, "openai-response")
 	headers := http.Header{"X-Session-ID": {"media-session"}}
 	for _, path := range []string{"/v1/videos", "/v1/videos/generations", "/v1/videos/edits", "/v1/videos/extensions"} {
+		start = probe.mark(t)
 		body := []byte(`{"model":"grok-imagine-video","prompt":"PRIVATE","duration":4,"video":{"url":"https://fixture.invalid/input.mp4"}}`)
 		status, raw := requestHTTP(t, "POST", h.url+path, body, headers)
 		if status != 200 || !bytes.Contains(raw, []byte(`"prompt":"PRIVATE"`)) || bytes.Contains(raw, []byte(token.Prefix)) {
 			t.Fatalf("%s: %d %s", path, status, raw)
 		}
+		probe.verify(t, path, start, "openai-video")
 	}
+	start = probe.mark(t)
 	status, raw = requestHTTP(t, "POST", h.url+"/openai/v1/videos", []byte(`{"model":"sora-2","prompt":"PRIVATE","seconds":"4","size":"1280x720"}`), headers)
 	if status != 200 || bytes.Contains(raw, []byte(token.Prefix)) {
 		t.Fatalf("Sora compatibility: %d %s", status, raw)
 	}
+	probe.verify(t, "/openai/v1/videos", start, "openai-video")
+	start = probe.mark(t)
 	status, raw = requestHTTP(t, "GET", h.url+"/v1/videos/video_fixture", nil, headers)
 	if status != 200 || !bytes.Contains(raw, []byte(`"prompt":"PRIVATE"`)) {
 		t.Fatalf("session-bound poll: %d %s", status, raw)
 	}
+	probe.verify(t, "videos/poll/session", start, "openai-video")
+	start = probe.mark(t)
 	status, raw = requestHTTP(t, "GET", h.url+"/v1/videos/video_fixture", nil, nil)
 	if status != 200 || !bytes.Contains(raw, []byte(token.Prefix)) {
 		t.Fatalf("independent poll borrowed another scope: %d %s", status, raw)
 	}
+	probe.verify(t, "videos/poll/request", start, "openai-video")
+	start = probe.mark(t)
 	status, raw = requestHTTP(t, "GET", h.url+"/openai/v1/videos/video_fixture/content", nil, headers)
 	if status != 200 || !bytes.Equal(raw, videoData) {
 		t.Fatalf("binary download: %d %s", status, raw)
 	}
+	// Download first executes a hooked JSON metadata poll to find the URL;
+	// the following media transfer itself is outside the text adapters.
+	probe.verify(t, "videos/download-metadata", start, "openai-video")
 	for _, path := range []string{"/v1/alpha/search", "/backend-api/codex/alpha/search"} {
+		start = probe.mark(t)
 		status, raw := post(t, h.url+path, `{"model":"gpt-5.4-mini","query":"PRIVATE"}`, false)
 		if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) {
 			t.Fatalf("search boundary: %d %s", status, raw)
 		}
+		probe.noRequest(t, start, path)
 	}
 	if imageCalls.Load() < 13 || videoCalls.Load() != 5 || searchCalls.Load() != 2 || uploadCalls.Load() < 1 {
 		t.Fatalf("missing media boundary calls: images=%d videos=%d search=%d uploads=%d", imageCalls.Load(), videoCalls.Load(), searchCalls.Load(), uploadCalls.Load())
