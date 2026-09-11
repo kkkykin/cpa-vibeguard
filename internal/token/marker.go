@@ -1,10 +1,15 @@
 // Package token owns random markers and the scoped, in-memory secret store.
 package token
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 const Prefix = "[[redacted:v1:"
 const Length = 48
+
+var ErrRestoreLimit = errors.New("restored_text_size_limit")
 
 func Possible(s string) bool {
 	if len(s) > Length {
@@ -33,6 +38,17 @@ func Valid(s string) bool { return len(s) == Length && Possible(s) }
 // Rewrite is a single pass over the supplied text. Replacement plaintext is
 // never scanned again, even if it happens to contain another valid marker.
 func Rewrite(text string, lookup func(string) (string, bool)) string {
+	out, _ := RewriteBounded(text, lookup, int(^uint(0)>>1))
+	return out
+}
+
+// RewriteBounded checks each append before allocating replacement bytes. The
+// caller may share the remaining budget across all selected response fields.
+// It returns no partial result on overflow and never scans restored plaintext.
+func RewriteBounded(text string, lookup func(string) (string, bool), limit int) (string, error) {
+	if limit < 0 {
+		return "", ErrRestoreLimit
+	}
 	var out strings.Builder
 	last, offset := 0, 0
 	for offset < len(text) {
@@ -48,7 +64,11 @@ func Rewrite(text string, lookup func(string) (string, bool)) string {
 		marker := text[start:end]
 		if Valid(marker) {
 			if original, ok := lookup(marker); ok {
-				out.WriteString(text[last:start])
+				literal := text[last:start]
+				if len(literal) > limit-out.Len() || len(original) > limit-out.Len()-len(literal) {
+					return "", ErrRestoreLimit
+				}
+				out.WriteString(literal)
 				out.WriteString(original)
 				last = end
 			}
@@ -58,8 +78,14 @@ func Rewrite(text string, lookup func(string) (string, bool)) string {
 		}
 	}
 	if last == 0 {
-		return text
+		if len(text) > limit {
+			return "", ErrRestoreLimit
+		}
+		return text, nil
+	}
+	if len(text)-last > limit-out.Len() {
+		return "", ErrRestoreLimit
 	}
 	out.WriteString(text[last:])
-	return out.String()
+	return out.String(), nil
 }

@@ -309,8 +309,14 @@ func (e *Engine) Response(req pluginapi.ResponseInterceptRequest) pluginapi.Resp
 	if err != nil {
 		return fail()
 	}
+	remaining := cfg.Limits.ResponseBytes
 	for _, field := range doc.Fields {
-		field.Set(s.lease.Restore(field.Text))
+		text, err := token.RewriteBounded(field.Text, s.lease.Lookup, remaining)
+		if err != nil {
+			return fail()
+		}
+		remaining -= len(text)
+		field.Set(text)
 	}
 	body, err := doc.Marshal()
 	if err != nil || len(body) > cfg.Limits.ResponseBytes {

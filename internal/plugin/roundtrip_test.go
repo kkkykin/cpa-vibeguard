@@ -185,3 +185,35 @@ func TestScopeIsolationAndResponseDegradation(t *testing.T) {
 		t.Fatal("missing state searched another scope")
 	}
 }
+
+func TestOrdinaryResponseExpansionIsBoundedAndTransactional(t *testing.T) {
+	e := configured(t, "limits: {response_bytes: 512}\nrule_sources: [{inline: {extend: {useDefault: false}, rules: [{id: long, regex: 'SECRET-[a-z]+'}]}}]")
+	secret := "SECRET-" + strings.Repeat("x", 400)
+	request, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": secret}}})
+	r := e.Before(pluginapi.RequestInterceptRequest{RequestID: "expansion", SourceFormat: "openai", Body: request})
+	if r.Terminate {
+		t.Fatal(r)
+	}
+	doc, err := protocol.Parse("openai", r.Body, true, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := doc.Fields[0].Text
+	// Each field independently fits, but their combined plaintext exceeds
+	// the per-response budget. Never publish a partially restored document.
+	raw := []byte(`{"choices":[{"message":{"content":"` + marker + `","refusal":"` + marker + `"}}]}`)
+	for i := 0; i < 2; i++ {
+		out := e.Response(pluginapi.ResponseInterceptRequest{RequestID: "expansion", SourceFormat: "openai", Body: raw})
+		if len(out.Body) != 0 || !bytes.Contains(raw, []byte(marker)) || bytes.Contains(raw, []byte(secret)) {
+			t.Fatal("response overflow committed a partial rewrite")
+		}
+	}
+	if e.Stats().ResponseDegraded != 1 {
+		t.Fatal("response overflow was counted more than once")
+	}
+	valid := []byte(`{"choices":[{"message":{"content":"` + marker + `"}}]}`)
+	out := e.Response(pluginapi.ResponseInterceptRequest{RequestID: "expansion", SourceFormat: "openai", Body: valid})
+	if len(out.Body) == 0 || !bytes.Contains(out.Body, []byte(secret)) || len(out.Body) > 512 {
+		t.Fatal("valid bounded response did not restore")
+	}
+}
