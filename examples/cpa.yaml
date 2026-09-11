@@ -1,3 +1,5 @@
+# Run from the repository root. Configure your CPA providers before sending requests.
+# Stop this host before rebuilding dist; use a separate plugin directory for deployment.
 host: "127.0.0.1"
 port: 8317
 auth-dir: "./auths"
@@ -13,6 +15,7 @@ plugins:
       on_unknown_api: reject
       on_request_error: reject
       preserve_marker_hint: false
+      # Optional: pair with examples/Caddyfile, or remove to disable header bypass.
       bypass:
         headers:
           - name: X-Vibeguard-Skip
