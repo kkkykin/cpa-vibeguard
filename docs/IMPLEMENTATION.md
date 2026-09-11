@@ -11,7 +11,7 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Unified TOML/YAML/inline documents, official defaults, field-preserving merges, disable unions, literal variable binding, bounded compilation cache, dynamic allowlists, and exact Gitleaks spans (`internal/rules`). `go test -race ./internal/rules ./internal/plugin`, `go vet ./...`, native build, and host integration tests pass.
    - [x] Regressions for capture-group occurrence selection, UTF-8/CRLF/multiline positions, crossing spans, gitleaks:allow comments, generic-rule suppression, invalid/disabled rules, and immutable concurrent bindings.
 3. Requests and ordinary responses
-   - [ ] Transactional random-marker store and exact restoration.
+   - [x] Transactional random-marker store and exact restoration (`internal/token`): 128-bit random IDs, stable concurrent reuse, scope isolation, rollback, bounded entries/bytes, idle TTL, active leases, and single-pass restoration. Verified with `go test -race ./internal/token`.
    - [ ] Protocol adapters, request mappings, text and tool codecs, native wrappers, and specialized text entrypoints.
 4. Sessions and multi-turn requests
    - [ ] Ordered sources, identity isolation, leases, history references, capacity, and idempotence.
