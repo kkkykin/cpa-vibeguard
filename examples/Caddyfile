@@ -1,0 +1,12 @@
+:8080 {
+    handle_path /unmasked/* {
+        reverse_proxy 127.0.0.1:8317 {
+            header_up X-Vibeguard-Skip true
+        }
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8317 {
+            header_up -X-Vibeguard-Skip
+        }
+    }
+}

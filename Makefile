@@ -16,4 +16,5 @@ vet:
 check: test race vet build
 
 integration: build
+	bash scripts/build-host.sh
 	go test -tags=integration -count=1 ./tests/integration/...

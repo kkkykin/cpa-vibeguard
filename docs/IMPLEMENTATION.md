@@ -4,8 +4,9 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
 
 1. Plugin skeleton, configuration, and entrypoint inventory
    - [x] Strict configuration defaults, types, duplicate members, JSON Pointer syntax, and header conditions (`internal/config`, `internal/document`). Verified with `go test ./internal/document ./internal/config`.
-   - [ ] Native ABI, four capabilities, lifecycle, request state, and sticky bypass.
-   - [ ] Unmodified host loading and recorded entrypoint fixtures.
+   - [x] Native ABI, four capabilities, lifecycle, bounded request state, and sticky bypass. Verified with `go test -race ./...`, `go vet ./...`, `make build`, and `TestNativeABI`.
+   - [x] Unmodified pinned CPA loads and registers the shared library; Chat JSON/SSE bypass round trips and successful-envelope business rejection are verified by `TestHostLifecycle` (including asynchronous capacity release).
+   - [ ] Full entrypoint inventory and recorded fixtures.
 2. Rule engine
    - [ ] Unified TOML/YAML/inline documents, defaults, merging, disable lists, templates, cache, and exact Gitleaks spans.
 3. Requests and ordinary responses

@@ -1,0 +1,200 @@
+//go:build integration
+
+package integration
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+type hostProcess struct {
+	url     string
+	cmd     *exec.Cmd
+	done    chan error
+	logPath string
+}
+
+func startHost(t *testing.T, upstream, pluginConfig string) *hostProcess {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(root, "bin/cpa-host")
+	if _, err := os.Stat(binary); err != nil {
+		t.Fatal("build pinned host first: bash scripts/build-host.sh")
+	}
+	dir := t.TempDir()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	config := fmt.Sprintf(`host: "127.0.0.1"
+port: %d
+auth-dir: %q
+api-keys: [fixture-client]
+commercial-mode: true
+disable-cooling: true
+request-retry: 0
+remote-management:
+  disable-control-panel: true
+plugins:
+  enabled: true
+  dir: %q
+  configs:
+    cpa-vibeguard:
+      enabled: true
+%s
+openai-compatibility:
+  - name: fixture
+    base-url: %q
+    api-key-entries:
+      - api-key: fixture-upstream
+    models:
+      - name: fixture-chat
+        alias: fixture-chat
+`, port, filepath.Join(dir, "auths"), filepath.Join(root, "dist"), pluginConfig, upstream+"/v1")
+	configPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "host.log")
+	log, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(binary, "--config", configPath, "--local-model")
+	cmd.Dir = dir
+	cmd.Stdout = log
+	cmd.Stderr = log
+	if err := cmd.Start(); err != nil {
+		log.Close()
+		t.Fatal(err)
+	}
+	h := &hostProcess{url: fmt.Sprintf("http://127.0.0.1:%d", port), cmd: cmd, done: make(chan error, 1), logPath: logPath}
+	go func() { h.done <- cmd.Wait(); log.Close() }()
+	t.Cleanup(func() {
+		_ = cmd.Process.Signal(os.Interrupt)
+		select {
+		case <-h.done:
+		case <-time.After(5 * time.Second):
+			_ = cmd.Process.Kill()
+			<-h.done
+		}
+		if t.Failed() {
+			b, _ := os.ReadFile(logPath)
+			t.Logf("host log:\n%s", b)
+		}
+	})
+	deadline := time.After(20 * time.Second)
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case err := <-h.done:
+			h.done <- err
+			t.Fatalf("host exited at startup: %v", err)
+		case <-deadline:
+			t.Fatal("host startup timed out")
+		case <-ticker.C:
+			resp, err := http.Get(h.url + "/healthz")
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 200 {
+					return h
+				}
+			}
+		}
+	}
+}
+
+func post(t *testing.T, url, body string, skip bool) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer fixture-client")
+	if skip {
+		req.Header.Set("X-Vibeguard-Skip", "true")
+	}
+	client := http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode, raw
+}
+
+func TestHostLifecycle(t *testing.T) {
+	var upstreamCalls atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
+			t.Errorf("unexpected upstream path %s", r.URL.Path)
+		}
+		var obj map[string]any
+		if json.Unmarshal(body, &obj) != nil {
+			t.Error("invalid upstream JSON")
+		}
+		if obj["stream"] == true {
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "data: {\"id\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"fixture reply\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":"fixture","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"fixture reply"},"finish_reason":"stop"}]}`)
+		}
+	}))
+	defer upstream.Close()
+	h := startHost(t, upstream.URL, "      bypass: {headers: [{name: X-Vibeguard-Skip, value: 'true'}]}\n      limits: {max_inflight: 1}")
+	for _, stream := range []bool{false, true, false} {
+		body := fmt.Sprintf(`{"model":"fixture-chat","messages":[{"role":"user","content":"fixture input"}],"stream":%v}`, stream)
+		var status int
+		var raw []byte
+		for i := 0; i < 20; i++ {
+			status, raw = post(t, h.url+"/v1/chat/completions", body, true)
+			if status != 429 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if status != 200 || !bytes.Contains(raw, []byte("fixture reply")) {
+			t.Fatalf("bypass roundtrip: %d %s", status, raw)
+		}
+	}
+	before := upstreamCalls.Load()
+	status, raw := post(t, h.url+"/v1/chat/completions", `{"model":"fixture-chat","messages":[{"role":"user","content":{"unsupported":true}}]}`, false)
+	if status != 400 || !bytes.Contains(raw, []byte("vibeguard_request_rejected")) {
+		t.Fatalf("business rejection: %d %s", status, raw)
+	}
+	if upstreamCalls.Load() != before {
+		t.Fatal("rejected request reached upstream")
+	}
+	logs, _ := os.ReadFile(h.logPath)
+	if !bytes.Contains(logs, []byte("plugin registered")) || !bytes.Contains(logs, []byte("cpa-vibeguard")) {
+		t.Fatalf("missing real host registration evidence: %s", logs)
+	}
+}
