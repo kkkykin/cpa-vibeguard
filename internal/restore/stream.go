@@ -30,6 +30,8 @@ type Stream struct {
 	arrayStarted, arrayItem, ended bool
 	budget                         int
 	budgetExceeded                 bool
+	responseSSE                    bool
+	sequenceOffset                 int64
 }
 
 type streamField struct {
@@ -164,6 +166,20 @@ func (s *Stream) Push(chunk []byte) ([]byte, []protocol.Reference, error) {
 		if s.budgetExceeded {
 			return nil, nil, errors.New("restored_event_size_limit")
 		}
+		if s.format == "openai-response" || s.format == "codex" {
+			if err := s.responseSequence(root, extra); err != nil {
+				return nil, nil, err
+			}
+			if s.framer.Mode == "json" && len(extra) > 0 {
+				if jsonEvents > 0 {
+					return nil, nil, errors.New("multiple_bare_stream_events")
+				}
+				// Native Responses WebSocket chunks are bare JSON. CPA also
+				// accepts SSE records here, allowing a tail delta before its
+				// done event without concatenating bare JSON objects.
+				s.responseSSE = true
+			}
+		}
 		for _, event := range append(extra, root) {
 			raw, err := json.Marshal(event)
 			if err != nil || len(raw) > s.limits.EventBytes {
@@ -194,6 +210,10 @@ func (s *Stream) Push(chunk []byte) ([]byte, []protocol.Reference, error) {
 				out.Write(raw)
 				s.arrayItem = true
 			case "json":
+				if s.responseSSE {
+					out.Write((Frame{HasData: true}).Render(raw))
+					break
+				}
 				jsonEvents++
 				if jsonEvents > 1 {
 					return nil, nil, errors.New("multiple_bare_stream_events")

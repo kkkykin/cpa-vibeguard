@@ -342,3 +342,104 @@ func TestHostWebSocketDisconnectReleasesRequest(t *testing.T) {
 		})
 	}
 }
+
+func partialResponseEvents(marker string, split int) []map[string]any {
+	id := fmt.Sprintf("resp_partial_%d", split)
+	itemID := "msg_" + id
+	part := map[string]any{"type": "output_text", "text": marker[:split]}
+	item := map[string]any{"id": itemID, "type": "message", "role": "assistant", "status": "completed", "content": []any{part}}
+	events := []map[string]any{
+		{"type": "response.created", "response": map[string]any{"id": id, "object": "response", "status": "in_progress", "output": []any{}}},
+		{"type": "response.output_item.added", "output_index": 0, "item": map[string]any{"id": itemID, "type": "message", "role": "assistant", "content": []any{}}},
+		{"type": "response.output_text.delta", "output_index": 0, "item_id": itemID, "content_index": 0, "delta": marker[:split]},
+		{"type": "response.output_text.done", "output_index": 0, "item_id": itemID, "content_index": 0, "text": marker[:split]},
+		{"type": "response.output_item.done", "output_index": 0, "item": item},
+		{"type": "response.completed", "response": map[string]any{"id": id, "object": "response", "status": "completed", "output": []any{item}}},
+	}
+	for i, event := range events {
+		event["sequence_number"] = i
+	}
+	return events
+}
+
+func TestHostWebSocketNormalPartialTail(t *testing.T) {
+	for _, native := range []bool{true, false} {
+		t.Run(fmt.Sprint(native), func(t *testing.T) {
+			var split atomic.Int64
+			captured := make(chan string, 4)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if websocket.IsWebSocketUpgrade(r) {
+					upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+					c, err := upgrader.Upgrade(w, r, nil)
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					defer c.Close()
+					_, raw, err := c.ReadMessage()
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					marker := redactedUpstream(t, "codex", raw)
+					captured <- marker
+					for _, event := range partialResponseEvents(marker, int(split.Load())) {
+						if err := c.WriteJSON(event); err != nil {
+							return
+						}
+					}
+					c.SetReadDeadline(time.Now().Add(10 * time.Second))
+					_, _, _ = c.ReadMessage()
+					return
+				}
+				raw, _ := io.ReadAll(r.Body)
+				marker := redactedUpstream(t, "codex", raw)
+				captured <- marker
+				w.Header().Set("Content-Type", "text/event-stream")
+				for _, event := range partialResponseEvents(marker, int(split.Load())) {
+					writeSSE(w, event)
+				}
+			}))
+			defer upstream.Close()
+			h := startHostConfigured(t, hostSettings{Providers: websocketProviders(upstream.URL, native), PluginConfig: hostRule + websocketSession})
+			for _, position := range []int{1, 13, 30, 47} {
+				split.Store(int64(position))
+				c := dialWS(t, h.url+"/v1/responses")
+				if err := c.WriteJSON(wsTurn("")); err != nil {
+					t.Fatal(err)
+				}
+				var text strings.Builder
+				done := false
+				for i := 0; ; i++ {
+					_, raw, err := c.ReadMessage()
+					if err != nil {
+						t.Fatal(err)
+					}
+					var event map[string]any
+					if err := json.Unmarshal(raw, &event); err != nil || event["type"] == "error" || event["sequence_number"] != float64(i) {
+						t.Fatalf("partial tail event %d: %v %s", i, err, raw)
+					}
+					switch event["type"] {
+					case "response.output_text.delta":
+						if done {
+							t.Fatal("tail delta appeared after field completion")
+						}
+						text.WriteString(event["delta"].(string))
+					case "response.output_text.done":
+						done = true
+					}
+					if event["type"] == "response.completed" {
+						if i != 6 {
+							t.Fatal("normal partial tail did not produce a separate delta")
+						}
+						break
+					}
+				}
+				c.Close()
+				if marker := <-captured; !done || text.String() != marker[:position] {
+					t.Fatalf("normal partial tail at %d: %q", position, text.String())
+				}
+			}
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package restore
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -8,6 +9,30 @@ import (
 	"github.com/kkkykin/cpa-vibeguard/internal/protocol"
 	"github.com/kkkykin/cpa-vibeguard/internal/token"
 )
+
+// Preserve upstream gaps while assigning inserted deltas a valid sequence and
+// shifting subsequent events. Streams that omit sequence_number stay optional.
+func (s *Stream) responseSequence(root map[string]any, extra []map[string]any) error {
+	v, exists := root["sequence_number"]
+	if !exists {
+		return nil
+	}
+	n, ok := v.(json.Number)
+	if !ok {
+		return errors.New("invalid_response_sequence")
+	}
+	sequence, err := n.Int64()
+	const maximum = int64(1<<63 - 1)
+	if err != nil || sequence < 0 || int64(len(extra)) > maximum-s.sequenceOffset || sequence > maximum-s.sequenceOffset-int64(len(extra)) {
+		return errors.New("invalid_response_sequence")
+	}
+	for i, event := range extra {
+		event["sequence_number"] = sequence + s.sequenceOffset + int64(i)
+	}
+	s.sequenceOffset += int64(len(extra))
+	root["sequence_number"] = sequence + s.sequenceOffset
+	return nil
+}
 
 func (s *Stream) responseGroup(m map[string]any) (string, delivery, error) {
 	d := delivery{family: "responses"}
