@@ -268,8 +268,38 @@ func (d *Document) responsesRequest() error {
 	if err := d.reference(m, "previous_response_id", "response", false); err != nil {
 		return err
 	}
-	return d.openaiTools(m)
+	if err := d.openaiTools(m); err != nil {
+		return err
+	}
+	return d.responsesTextFormat(m, "")
 }
+
+func (d *Document) responsesTextFormat(m map[string]any, path string) error {
+	v, exists := m["text"]
+	if !exists {
+		return nil
+	}
+	text, err := object(v, path+"/text")
+	if err != nil {
+		return err
+	}
+	v, exists = text["format"]
+	if !exists {
+		return nil
+	}
+	format, err := object(v, path+"/text/format")
+	if err != nil {
+		return err
+	}
+	if err := d.str(format, "description", path+"/text/format", false); err != nil {
+		return err
+	}
+	if schema, exists := format["schema"]; exists {
+		return d.schema(schema, path+"/text/format/schema")
+	}
+	return nil
+}
+
 func (d *Document) responsesResponse(m map[string]any, path string) error {
 	if v, ok := m["response"]; ok {
 		x, err := object(v, path+"/response")
@@ -287,6 +317,9 @@ func (d *Document) responsesResponse(m map[string]any, path string) error {
 	// Responses can echo the redacted request's tool definitions. They are
 	// complete fields in both ordinary responses and terminal stream snapshots.
 	if err := d.openaiTools(m); err != nil {
+		return err
+	}
+	if err := d.responsesTextFormat(m, path); err != nil {
 		return err
 	}
 	if err := d.str(m, "output_text", path, false); err != nil {
