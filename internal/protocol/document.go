@@ -40,6 +40,7 @@ type Document struct {
 	ResponseIDs []Reference
 	toolLimit   int
 	codecs      []codec
+	multipart   *multipartDocument
 }
 
 func Known(format string) bool {
@@ -127,6 +128,9 @@ func Parse(format string, raw []byte, request bool, toolLimit int) (*Document, e
 	return d, nil
 }
 func (d *Document) Marshal() ([]byte, error) {
+	if d.multipart != nil {
+		return d.multipart.marshal()
+	}
 	for _, c := range d.codecs {
 		raw, err := json.Marshal(c.tree)
 		if err != nil {

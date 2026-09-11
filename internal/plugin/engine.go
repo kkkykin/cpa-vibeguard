@@ -147,7 +147,7 @@ func (e *Engine) prepare(s *requestState, req pluginapi.RequestInterceptRequest)
 	if len(req.Body) > cfg.Limits.RequestBytes {
 		return e.requestError(s, "request_size_limit")
 	}
-	doc, err := protocol.Parse(req.SourceFormat, req.Body, true, cfg.Limits.ToolJSONBytes)
+	doc, err := protocol.ParseRequest(req.SourceFormat, req.Body, req.Headers, cfg.Limits.ToolJSONBytes)
 	if err != nil {
 		if errors.Is(err, protocol.ErrUnknown) {
 			return e.unknown(s)
