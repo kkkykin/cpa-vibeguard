@@ -1,4 +1,4 @@
-.PHONY: build test race vet check integration
+.PHONY: build test race vet check integration bench
 
 build:
 	mkdir -p dist
@@ -19,3 +19,6 @@ integration: build
 	bash scripts/build-host.sh
 	bash scripts/build-caddy.sh
 	go test -tags=integration -count=1 ./tests/integration/...
+
+bench:
+	go test ./internal/rules ./internal/restore -run '^$$' -bench . -benchmem -benchtime=200ms -cpu=1
