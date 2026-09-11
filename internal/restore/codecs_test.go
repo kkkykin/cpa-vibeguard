@@ -11,6 +11,53 @@ import (
 
 const marker = "[[redacted:v1:0123456789abcdef0123456789abcdef]]"
 
+func TestRecordFramingDoesNotReparseGrowingString(t *testing.T) {
+	raw := []byte(`data: {"text":"` + strings.Repeat("}", 16<<10) + `"}`)
+	allocations := testing.AllocsPerRun(1, func() {
+		f := Framer{Limit: 32 << 10, Records: true}
+		count := 0
+		for i := range raw {
+			frames, err := f.Push(raw[i : i+1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			count += len(frames)
+		}
+		if count != 1 || f.Buffered() != 0 {
+			t.Fatal("fragmented record was lost or retained")
+		}
+	})
+	// Buffer growth and the final frame take a bounded number of allocations.
+	// Re-parsing every closing brace would allocate tens of thousands of times.
+	if allocations > 200 {
+		t.Fatalf("repeated parsing of incomplete JSON: %.0f allocations", allocations)
+	}
+}
+
+func TestRecordFramingIgnoresMetadataAndPreservesPartialLines(t *testing.T) {
+	raw := []byte("event: metadata contains \"{]}\"\r\ndata: {\"items\":[\ndata: \"}\\\"{\",\ndata: {\"v\":\"}\"}]}")
+	f := Framer{Limit: 1024, Records: true}
+	var frames []Frame
+	for i := range raw {
+		got, err := f.Push(raw[i : i+1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		frames = append(frames, got...)
+	}
+	if len(frames) != 1 || !json.Valid(frames[0].Data) || len(frames[0].Lines) != 1 {
+		t.Fatalf("metadata affected JSON balance: %+v", frames)
+	}
+	f = Framer{Limit: 1024, Records: true}
+	if frames, err := f.Push([]byte("data: {}\nid: hello")); err != nil || len(frames) != 0 {
+		t.Fatal("partial metadata line delivered prematurely")
+	}
+	frames, err := f.Push([]byte(" world\n\n"))
+	if err != nil || len(frames) != 1 || !strings.Contains(string(frames[0].Render(frames[0].Data)), "id: hello world") {
+		t.Fatalf("metadata fragment lost: %v %+v", err, frames)
+	}
+}
+
 func lookup(s string) (string, bool) {
 	if s == marker {
 		return "中文\"\n\\secret", true
