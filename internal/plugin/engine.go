@@ -92,6 +92,9 @@ func (e *Engine) Configure(raw []byte) error {
 		generation = e.current.generation + 1
 	}
 	e.current = &snapshot{config: cfg, generation: generation, rules: ruleEngine}
+	// CPA also uses reconfigure to reactivate the old instance when a binary
+	// replacement fails after quiesce. A closed instance cannot be resumed.
+	e.quiesced = false
 	return nil
 }
 

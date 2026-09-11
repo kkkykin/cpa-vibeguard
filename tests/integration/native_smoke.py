@@ -61,7 +61,9 @@ assert len(reg["capabilities"]) == 4 and all(reg["capabilities"].values())
 body = base64.b64encode(b"malformed [[redacted:v1:0123456789abcdef0123456789abcdef]]").decode()
 request = {"RequestID": "native-1", "Headers": {"X-Skip": ["yes"]}, "Body": body}
 assert not call("request.intercept_before", request)["Terminate"]
-call("plugin.reconfigure", lifecycle("unexpected: invalid"), ok=False)
+rejected_update = call("plugin.reconfigure", lifecycle("unexpected: invalid"))
+assert "configuration_error" in rejected_update
+assert all(rejected_update["capabilities"].values())
 assert not call("request.intercept_after", request)["Terminate"]
 assert not call("response.intercept_after", request)["Body"]
 assert not call("response.intercept_stream_chunk", dict(request, ChunkIndex=0))["DropChunk"]

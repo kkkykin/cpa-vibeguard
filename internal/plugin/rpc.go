@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"errors"
+	"log"
 
 	"github.com/kkkykin/cpa-vibeguard/internal/document"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginabi"
@@ -26,6 +27,9 @@ type registration struct {
 	SchemaVersion uint32             `json:"schema_version"`
 	Metadata      pluginapi.Metadata `json:"metadata"`
 	Capabilities  capabilities       `json:"capabilities"`
+	// CPA ignores this diagnostic, but returning the existing capabilities
+	// keeps its active hooks installed when a candidate configuration fails.
+	ConfigurationError string `json:"configuration_error,omitempty"`
 }
 
 func Registration() registration {
@@ -70,6 +74,16 @@ func (e *Engine) dispatch(method string, raw []byte) (any, error) {
 			return nil, errors.New("host_schema_6_required")
 		}
 		if err := e.Configure(req.ConfigYAML); err != nil {
+			if method == pluginabi.MethodPluginReconfigure && e.configured() {
+				// CPA removes a plugin's active hooks on an RPC reconfigure
+				// error. Report validation failure without unregistering the
+				// previous working configuration. Configure errors contain
+				// only error codes, field locations, source paths and rule IDs.
+				log.Printf("cpa-vibeguard: reconfigure_rejected; previous configuration retained: %q", err.Error())
+				reg := Registration()
+				reg.ConfigurationError = err.Error()
+				return reg, nil
+			}
 			return nil, err
 		}
 		return Registration(), nil
@@ -110,4 +124,10 @@ func (e *Engine) dispatch(method string, raw []byte) (any, error) {
 	default:
 		return nil, errors.New("unknown_rpc_method")
 	}
+}
+
+func (e *Engine) configured() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.current != nil && !e.closed
 }

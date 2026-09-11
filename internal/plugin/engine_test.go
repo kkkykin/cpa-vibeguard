@@ -1,9 +1,11 @@
 package plugin
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -189,5 +191,57 @@ func TestRPCRegistrationAndTerminationEnvelope(t *testing.T) {
 	}
 	if env := call("does.not.exist", nil); env.OK {
 		t.Fatal(env)
+	}
+}
+
+func TestRPCRejectedReconfigureKeepsHooksAndProtection(t *testing.T) {
+	e := New()
+	defer e.Close()
+	call := func(method, config string) (pluginabi.Envelope, registration) {
+		t.Helper()
+		raw, _ := json.Marshal(lifecycleRequest{SchemaVersion: 6, ConfigYAML: []byte(config)})
+		var env pluginabi.Envelope
+		var reg registration
+		if err := json.Unmarshal(e.Handle(method, raw), &env); err != nil {
+			t.Fatal(err)
+		}
+		if env.OK {
+			if err := json.Unmarshal(env.Result, &reg); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return env, reg
+	}
+	badConfig := "rule_sources: [{inline: {rules: [{id: invalid, regex: 'PRIVATE('}]}}]"
+	if env, _ := call(pluginabi.MethodPluginRegister, badConfig); env.OK {
+		t.Fatal("initial invalid configuration must fail registration")
+	}
+	if env, _ := call(pluginabi.MethodPluginRegister, privateRule); !env.OK {
+		t.Fatal(env)
+	}
+	for _, invalid := range []string{badConfig, "limits: {request_bytes: PRIVATE}", "unexpected: PRIVATE"} {
+		env, reg := call(pluginabi.MethodPluginReconfigure, invalid)
+		if !env.OK || reg.ConfigurationError == "" || reg.Capabilities != Registration().Capabilities {
+			t.Fatalf("rejected update must preserve CPA's hook registration: %+v %+v", env, reg)
+		}
+		if strings.Contains(reg.ConfigurationError, "PRIVATE") {
+			t.Fatal("configuration diagnostic exposed a value")
+		}
+		r := e.Before(pluginapi.RequestInterceptRequest{RequestID: "after-update", SourceFormat: "openai", Body: []byte(`{"messages":[{"role":"user","content":"PRIVATE"}]}`)})
+		if r.Terminate || len(r.Body) == 0 || bytes.Contains(r.Body, []byte("PRIVATE")) {
+			t.Fatalf("rejected update removed protection: %+v", r)
+		}
+		e.Complete("after-update")
+	}
+	e.Quiesce()
+	if env, reg := call(pluginabi.MethodPluginReconfigure, privateRule); !env.OK || reg.ConfigurationError != "" {
+		t.Fatal("valid reconfigure did not resume the quiesced instance")
+	}
+	if r := e.Before(pluginapi.RequestInterceptRequest{RequestID: "resumed", SourceFormat: "openai", Body: []byte(`{"messages":[{"role":"user","content":"PRIVATE"}]}`)}); r.Terminate {
+		t.Fatal(r)
+	}
+	e.Close()
+	if env, _ := call(pluginabi.MethodPluginReconfigure, privateRule); env.OK {
+		t.Fatal("closed instance resumed")
 	}
 }
