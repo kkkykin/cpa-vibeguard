@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/kkkykin/cpa-vibeguard/internal/config"
+	"github.com/kkkykin/cpa-vibeguard/internal/rules"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
 
@@ -24,6 +25,7 @@ const (
 type snapshot struct {
 	config     *config.Config
 	generation uint64
+	rules      *rules.Engine
 }
 type requestState struct {
 	mu        sync.Mutex
@@ -58,6 +60,10 @@ func (e *Engine) Configure(raw []byte) error {
 	if err != nil {
 		return err
 	}
+	ruleEngine, err := rules.New(cfg, nil)
+	if err != nil {
+		return err
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {
@@ -67,7 +73,7 @@ func (e *Engine) Configure(raw []byte) error {
 	if e.current != nil {
 		generation = e.current.generation + 1
 	}
-	e.current = &snapshot{config: cfg, generation: generation}
+	e.current = &snapshot{config: cfg, generation: generation, rules: ruleEngine}
 	return nil
 }
 

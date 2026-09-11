@@ -1,0 +1,9 @@
+# Optional PII rules. Add this file to rule_sources to enable them.
+rules:
+  - id: pii-email
+    description: Email address
+    regex: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+    keywords: ['@']
+  - id: pii-phone-cn
+    description: Mainland China mobile phone number
+    regex: '\b1[3-9][0-9]{9}\b'

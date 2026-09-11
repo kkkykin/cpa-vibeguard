@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "internal-project-code"
+description = "Internal project identifier"
+regex = '''\bPROJ-[A-Z0-9]{8}\b'''
+keywords = ["PROJ-"]

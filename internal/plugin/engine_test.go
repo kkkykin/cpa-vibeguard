@@ -80,6 +80,29 @@ func TestUnknownPolicyAndFailedReconfigure(t *testing.T) {
 	}
 }
 
+func TestRuleConfigurationIsAtomic(t *testing.T) {
+	e := configured(t, "on_unknown_api: passthrough")
+	old := e.current
+	if err := e.Configure([]byte("disabled_rules: [unknown-rule]")); err == nil {
+		t.Fatal("unknown disabled rule accepted")
+	}
+	if e.current != old {
+		t.Fatal("invalid rules replaced the snapshot")
+	}
+	if err := e.Configure([]byte("rule_sources: [{inline: {rules: [{id: bad, regex: '('}]}}]")); err == nil {
+		t.Fatal("invalid regex accepted")
+	}
+	if e.current != old {
+		t.Fatal("invalid regex replaced the snapshot")
+	}
+	if err := e.Configure([]byte("disabled_rules: [generic-api-key]")); err != nil {
+		t.Fatal(err)
+	}
+	if e.current.generation != old.generation+1 {
+		t.Fatal("snapshot generation not advanced")
+	}
+}
+
 func TestCapacityCompletionAndQuiesce(t *testing.T) {
 	e := configured(t, "on_unknown_api: passthrough\nlimits: {max_inflight: 1}")
 	if r := e.Before(pluginapi.RequestInterceptRequest{RequestID: "a"}); r.Terminate {

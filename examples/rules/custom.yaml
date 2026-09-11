@@ -1,0 +1,8 @@
+extend:
+  useDefault: true
+rules:
+  - id: internal-hostname
+    description: Internal service hostname
+    regex: '\b([a-z0-9-]+\.internal)\b'
+    secretGroup: 1
+    keywords: ['.internal']
