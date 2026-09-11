@@ -1,0 +1,64 @@
+[
+  {
+    "name": "chat-text-tools", "format": "openai", "framing": "json",
+    "request": {"model":"fixture","messages":[{"role":"user","content":"PRIVATE"}]},
+    "events": [
+      {"choices":[{"index":0,"delta":{"role":"assistant","content":"@HEAD@"}}]},
+      {"choices":[{"index":0,"delta":{"content":"@TAIL@","tool_calls":[{"index":0,"type":"function","function":{"name":"lookup","arguments":"{\"q\":\"@HEAD@"}}]}}]},
+      {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"@TAIL@\"}"}}]}}]},
+      {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"total_tokens":7}}
+    ]
+  },
+  {
+    "name":"responses-text-snapshots", "format":"openai-response", "framing":"sse",
+    "request":{"model":"fixture","input":"PRIVATE"},
+    "events":[
+      {"type":"response.created","response":{"id":"resp_fixture","output":[]}},
+      {"type":"response.output_text.delta","output_index":0,"item_id":"msg_fixture","content_index":0,"delta":"@HEAD@"},
+      {"type":"response.output_text.delta","output_index":0,"item_id":"msg_fixture","content_index":0,"delta":"@TAIL@"},
+      {"type":"response.output_text.done","output_index":0,"item_id":"msg_fixture","content_index":0,"text":"@MARKER@"},
+      {"type":"response.completed","response":{"id":"resp_fixture","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"@MARKER@"}]}]}}
+    ]
+  },
+  {
+    "name":"claude-text-tools", "format":"claude", "framing":"sse",
+    "request":{"model":"fixture","max_tokens":256,"messages":[{"role":"user","content":"PRIVATE"}]},
+    "events":[
+      {"type":"message_start","message":{"id":"msg_fixture","role":"assistant","content":[],"usage":{"input_tokens":1}}},
+      {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},
+      {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"@HEAD@"}},
+      {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"@TAIL@"}},
+      {"type":"content_block_stop","index":0},
+      {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool_fixture","name":"lookup","input":{}}},
+      {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"q\":\"@HEAD@"}},
+      {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"@TAIL@\"}"}},
+      {"type":"content_block_stop","index":1},
+      {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":7}},
+      {"type":"message_stop"}
+    ]
+  },
+  {
+    "name":"gemini-candidates-tool-snapshot", "format":"gemini", "framing":"json",
+    "request":{"contents":[{"role":"user","parts":[{"text":"PRIVATE"}]}]},
+    "events":[
+      {"candidates":[{"index":0,"content":{"role":"model","parts":[{"text":"@HEAD@"}]}},{"index":1,"content":{"role":"model","parts":[{"text":"@MARKER@","thought":true,"thoughtSignature":"OPAQUE"}]}}]},
+      {"candidates":[{"index":0,"content":{"role":"model","parts":[{"text":"@TAIL@"},{"functionCall":{"name":"lookup","args":{"q":"@MARKER@"}},"thoughtSignature":"OPAQUE"}]},"finishReason":"STOP"},{"index":1,"finishReason":"STOP"}],"usageMetadata":{"totalTokenCount":7}}
+    ]
+  },
+  {
+    "name":"interactions-text-tools", "format":"interactions", "framing":"sse",
+    "request":{"model":"fixture","input":"PRIVATE"},
+    "events":[
+      {"event_type":"interaction.created","interaction":{"id":"interaction_fixture"}},
+      {"event_type":"step.start","index":0,"step":{"type":"model_output"}},
+      {"event_type":"step.delta","index":0,"delta":{"type":"text","text":"@HEAD@"}},
+      {"event_type":"step.delta","index":0,"delta":{"type":"text","text":"@TAIL@"}},
+      {"event_type":"step.stop","index":0},
+      {"event_type":"step.start","index":1,"step":{"type":"function_call","id":"call_fixture","name":"lookup","arguments":{}}},
+      {"event_type":"step.delta","index":1,"delta":{"type":"arguments_delta","arguments":"{\"q\":\"@HEAD@"}},
+      {"event_type":"step.delta","index":1,"delta":{"type":"arguments_delta","arguments":"@TAIL@\"}"}},
+      {"event_type":"step.stop","index":1},
+      {"event_type":"interaction.completed","interaction":{"id":"interaction_fixture","outputs":[{"type":"text","text":"@MARKER@"}],"usage":{"total_output_tokens":7}}}
+    ]
+  }
+]

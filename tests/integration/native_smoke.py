@@ -127,8 +127,38 @@ for fixture in fixtures:
     assert normalize(actual) == normalize(fixture["response"]), fixture["name"]
     call("request.complete", {"RequestID": request_id, "Outcome": "succeeded"})
 
+stream_fixtures = json.loads((pathlib.Path(__file__).parents[2] / "testdata/streams.json").read_text())
+for fixture in stream_fixtures:
+    request_id = "native-stream-" + fixture["name"]
+    intercepted = call("request.intercept_before", {
+        "RequestID": request_id, "SourceFormat": fixture["format"],
+        "Body": base64.b64encode(json.dumps(fixture["request"]).encode()).decode()})
+    assert not intercepted["Terminate"], intercepted
+    masked = base64.b64decode(intercepted["Body"]).decode()
+    marker = re.search(r"\[\[redacted:v1:[0-9a-f]{32}\]\]", masked).group()
+    delivered = []
+    for index, event in enumerate(fixture["events"]):
+        raw = json.dumps(event).replace("@MARKER@", marker).replace("@HEAD@", marker[:20]).replace("@TAIL@", marker[20:])
+        if fixture["framing"] == "sse":
+            raw = "data: " + raw + "\n\n"
+        result = call("response.intercept_stream_chunk", {
+            "RequestID": request_id, "SourceFormat": fixture["format"],
+            "ChunkIndex": index, "Body": base64.b64encode(raw.encode()).decode()})
+        assert result["Body"] and not result["DropChunk"], (fixture["name"], index, result)
+        output = base64.b64decode(result["Body"]).decode()
+        if fixture["framing"] == "sse":
+            for line in output.splitlines():
+                if line.startswith("data:"):
+                    json.loads(line[5:])
+        else:
+            json.loads(output)
+        delivered.append(output)
+    joined = "".join(delivered)
+    assert "PRIVATE" in joined and "[[redacted:v1:" not in joined, fixture["name"]
+    call("request.complete", {"RequestID": request_id, "Outcome": "succeeded"})
+
 call("plugin.quiesce", {})
 assert call("request.intercept_before", {"RequestID": "quiesced"})["StatusCode"] == 503
 call("plugin.shutdown", {})
 api.shutdown()
-print("ABI 1 / schema 6: lifecycle and all protocol request/JSON response fixtures passed")
+print("ABI 1 / schema 6: lifecycle, all protocol JSON fixtures, and five stream formats passed")

@@ -37,7 +37,7 @@ type Framer struct {
 	comma, afterComma, closed bool
 }
 
-func (f *Framer) Buffered() int { return len(f.buffer) }
+func (f *Framer) Buffered() int { return cap(f.buffer) }
 func (f *Framer) Abort()        { f.buffer = nil; f.scan = 0; f.depth = 0; f.closed = true }
 func (f *Framer) Push(chunk []byte) ([]Frame, error) {
 	if f.closed && len(bytes.TrimSpace(chunk)) > 0 {
@@ -185,7 +185,9 @@ func (f *Framer) Push(chunk []byte) ([]Frame, error) {
 	}
 	if len(f.buffer) == 0 {
 		f.buffer = nil
-	} else {
+	} else if len(frames) > 0 {
+		// Copy only after consuming frames. Cloning every incomplete fragment
+		// makes byte-sized input quadratic in the event size.
 		f.buffer = bytes.Clone(f.buffer)
 	}
 	return frames, nil

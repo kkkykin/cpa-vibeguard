@@ -19,7 +19,9 @@ The six delivery steps in PLAN.md remain the acceptance scope. A checked subtask
    - [x] Ordered profiles and header/JSON/metadata sources, trusted identity/namespace isolation, leases, history reference registration, generation-aware expiry, capacity, and retry idempotence (`internal/session`, plugin/session tests).
    - [x] Unchanged history prefixes remain stable across source switches, concurrent requests, and rule-disable reconfiguration. Real CPA authenticated multi-turn prefix stability passes `TestHostSessionHistoricalPrefix`; no claim is made about real upstream cache hits.
 5. Streaming and WebSocket
-   - [x] Bounded text tails, incremental tool JSON values (keys preserved), and SSE/JSON/array framing. `go test -race ./internal/restore` covers every marker/SSE split, UTF-8/escapes, normal and abnormal tails, duplicate tool keys, and buffer limits. Protocol stream hooks are still pending.
-   - [ ] Field deltas, tool JSON, snapshots, terminal events, bounded framing, abnormal stream cleanup, and WebSocket host tests.
+   - [x] Bounded text tails, incremental tool JSON values (keys preserved), and SSE/JSON/array framing. `go test -race ./internal/restore` covers every marker/SSE split, UTF-8/escapes, normal and abnormal tails, duplicate tool keys, and buffer limits.
+   - [x] Request-owned stream hook for Chat, Responses/Codex, Claude, Gemini/Antigravity, and Interactions: independent fields, tool deltas, snapshot restoration, terminal flushing, response ID registration, one-time degradation, and abort cleanup. `go test -race ./internal/restore ./internal/plugin ./internal/protocol`, vet, native build, and integration pass. Five actual C ABI stream fixtures are recorded in `testdata/streams.json`.
+   - [x] Real CPA Chat/legacy streams cover every marker split (49 positions), parallel choices, byte-sized tool argument deltas, usage, normal partial tails, and abnormal EOF (`TestHostProtectedChatStreamsEverySplit`, `TestHostStreamToolsAndNormalPartialTail`).
+   - [ ] Remaining native/cross-format stream entrypoints, cancel/disconnect, and WebSocket host tests.
 6. Release verification and documentation
    - [ ] Full tests, race, vet, shared-library/host tests, reconfiguration/restart/replacement, benchmarks, and observed coverage matrix.

@@ -28,7 +28,7 @@ func NewToolJSON(lookup Lookup, limit int) *ToolJSON {
 	return &ToolJSON{lookup: lookup, limit: limit, text: NewText(lookup)}
 }
 func (c *ToolJSON) Buffered() int {
-	return c.raw.Len() + len(c.partial) + c.text.Buffered() + len(c.stack)*2
+	return c.raw.Cap() + len(c.partial) + c.text.Buffered() + cap(c.stack)*2
 }
 func (c *ToolJSON) Abort() {
 	c.raw.Reset()
@@ -221,6 +221,7 @@ func (c *ToolJSON) Push(fragment string, final bool) (string, error) {
 		}
 		c.validated = true
 		c.raw.Reset()
+		c.stack = nil
 	}
 	if final && (!c.done || c.partial != "" || c.inString || c.primitive) {
 		return "", errors.New("incomplete_tool_json")

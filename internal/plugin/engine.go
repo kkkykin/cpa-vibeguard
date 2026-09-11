@@ -11,6 +11,7 @@ import (
 
 	"github.com/kkkykin/cpa-vibeguard/internal/config"
 	"github.com/kkkykin/cpa-vibeguard/internal/protocol"
+	"github.com/kkkykin/cpa-vibeguard/internal/restore"
 	"github.com/kkkykin/cpa-vibeguard/internal/rules"
 	"github.com/kkkykin/cpa-vibeguard/internal/session"
 	"github.com/kkkykin/cpa-vibeguard/internal/token"
@@ -33,18 +34,20 @@ type snapshot struct {
 	rules      *rules.Engine
 }
 type requestState struct {
-	mu        sync.Mutex
-	config    *snapshot
-	decision  decision
-	format    string
-	body      []byte
-	rejection pluginapi.RequestInterceptResponse
-	closed    bool
-	lease     *token.Lease
-	degraded  bool
-	ctx       context.Context
-	cancel    context.CancelFunc
-	selection session.Selection
+	mu            sync.Mutex
+	config        *snapshot
+	decision      decision
+	format        string
+	body          []byte
+	rejection     pluginapi.RequestInterceptResponse
+	closed        bool
+	lease         *token.Lease
+	degraded      bool
+	ctx           context.Context
+	cancel        context.CancelFunc
+	selection     session.Selection
+	stream        *restore.Stream
+	streamStopped bool
 }
 type counters struct{ header, unknown, requestError, rejected, protected, degraded atomic.Uint64 }
 type Stats struct {
@@ -322,7 +325,46 @@ func (e *Engine) degrade(s *requestState) {
 	}
 }
 func (e *Engine) Stream(req pluginapi.StreamChunkInterceptRequest) pluginapi.StreamChunkInterceptResponse {
-	return pluginapi.StreamChunkInterceptResponse{}
+	s := e.state(req.RequestID)
+	if s == nil {
+		return pluginapi.StreamChunkInterceptResponse{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.decision != protected || s.streamStopped {
+		return pluginapi.StreamChunkInterceptResponse{}
+	}
+	fail := func() pluginapi.StreamChunkInterceptResponse {
+		if s.stream != nil {
+			s.stream.Abort()
+			s.stream = nil
+		}
+		s.streamStopped = true
+		e.degrade(s)
+		return pluginapi.StreamChunkInterceptResponse{}
+	}
+	if req.SourceFormat != s.format {
+		return fail()
+	}
+	if req.ChunkIndex == pluginapi.StreamChunkHeaderInitIndex || len(req.Body) == 0 {
+		return pluginapi.StreamChunkInterceptResponse{}
+	}
+	if s.stream == nil {
+		limits := s.config.config.Limits
+		limits.RequestStateBytes -= len(s.body)
+		if limits.RequestStateBytes <= 0 {
+			return fail()
+		}
+		s.stream = restore.NewStream(s.format, limits, s.lease.Lookup)
+	}
+	body, ids, err := s.stream.Push(req.Body)
+	if err != nil {
+		return fail()
+	}
+	if err := e.sessions.Record(s.selection, ids); err != nil {
+		return fail()
+	}
+	return pluginapi.StreamChunkInterceptResponse{Body: body, DropChunk: len(body) == 0}
 }
 func (e *Engine) Complete(id string) {
 	e.mu.Lock()
@@ -339,6 +381,10 @@ func (e *Engine) Complete(id string) {
 	defer s.mu.Unlock()
 	s.closed = true
 	s.body = nil
+	if s.stream != nil {
+		s.stream.Abort()
+		s.stream = nil
+	}
 	if s.lease != nil {
 		s.lease.Release()
 		s.lease = nil
@@ -360,6 +406,10 @@ func (e *Engine) Close() {
 		s.mu.Lock()
 		s.closed = true
 		s.body = nil
+		if s.stream != nil {
+			s.stream.Abort()
+			s.stream = nil
+		}
 		if s.lease != nil {
 			s.lease.Release()
 			s.lease = nil
