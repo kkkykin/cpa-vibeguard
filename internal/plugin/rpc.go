@@ -74,7 +74,7 @@ func (e *Engine) dispatch(method string, raw []byte) (any, error) {
 			return nil, errors.New("host_schema_6_required")
 		}
 		if err := e.Configure(req.ConfigYAML); err != nil {
-			if method == pluginabi.MethodPluginReconfigure && e.configured() {
+			if method == pluginabi.MethodPluginReconfigure && e.retainConfiguration() {
 				// CPA removes a plugin's active hooks on an RPC reconfigure
 				// error. Report validation failure without unregistering the
 				// previous working configuration. Configure errors contain
@@ -126,8 +126,14 @@ func (e *Engine) dispatch(method string, raw []byte) (any, error) {
 	}
 }
 
-func (e *Engine) configured() bool {
+func (e *Engine) retainConfiguration() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.current != nil && !e.closed
+	if e.current == nil || e.closed {
+		return false
+	}
+	// During replacement rollback CPA can resend a previously rejected
+	// candidate. Restore the working snapshot's availability in that case too.
+	e.quiesced = false
+	return true
 }

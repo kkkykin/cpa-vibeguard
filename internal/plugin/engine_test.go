@@ -220,6 +220,7 @@ func TestRPCRejectedReconfigureKeepsHooksAndProtection(t *testing.T) {
 		t.Fatal(env)
 	}
 	for _, invalid := range []string{badConfig, "limits: {request_bytes: PRIVATE}", "unexpected: PRIVATE"} {
+		e.Quiesce() // A failed replacement can reconfigure the old instance.
 		env, reg := call(pluginabi.MethodPluginReconfigure, invalid)
 		if !env.OK || reg.ConfigurationError == "" || reg.Capabilities != Registration().Capabilities {
 			t.Fatalf("rejected update must preserve CPA's hook registration: %+v %+v", env, reg)

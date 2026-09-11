@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -221,4 +222,92 @@ func copyPlugin(t *testing.T, dir, name string) string {
 	path := filepath.Join(dir, name)
 	atomicFile(t, path, raw)
 	return path
+}
+
+func runtimeResponses(t *testing.T, h *hostProcess, input, previous, session string) (int, []byte) {
+	t.Helper()
+	req := map[string]any{"model": "fixture-ws", "input": input}
+	if previous != "" {
+		req["previous_response_id"] = previous
+	}
+	body, _ := json.Marshal(req)
+	headers := make(http.Header)
+	if session != "" {
+		headers.Set("X-Session-ID", session)
+	}
+	return requestHTTP(t, "POST", h.url+"/v1/responses", body, headers)
+}
+
+func TestHostRestartAndBinaryReplacement(t *testing.T) {
+	for _, replacement := range []bool{false, true} {
+		t.Run(fmt.Sprint(replacement), func(t *testing.T) {
+			captured := make(chan string, 16)
+			var calls atomic.Int64
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				raw, _ := io.ReadAll(r.Body)
+				marker := redactedUpstream(t, "codex", raw)
+				captured <- marker
+				id := fmt.Sprintf("resp_runtime_%d", calls.Add(1))
+				w.Header().Set("Content-Type", "text/event-stream")
+				for _, event := range responseEvents(marker, id) {
+					writeSSE(w, event)
+				}
+			}))
+			defer upstream.Close()
+			pluginDir := t.TempDir()
+			copyPlugin(t, pluginDir, "cpa-vibeguard-v0.1.0.so")
+			cfg := hostRule + runtimeSession + "\n      priority: 0"
+			h := startHostConfigured(t, hostSettings{Providers: websocketProviders(upstream.URL, false), PluginConfig: cfg, PluginDir: pluginDir})
+			status, raw := runtimeResponses(t, h, "PRIVATE", "", "runtime")
+			if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
+				t.Fatalf("initial response: %d %s", status, raw)
+			}
+			oldMarker := <-captured
+			var response map[string]any
+			if err := json.Unmarshal(raw, &response); err != nil {
+				t.Fatal(err)
+			}
+			previous := response["id"].(string)
+			// With no explicit source, a registered response ID recovers the
+			// original authenticated scope before its instance is replaced.
+			status, raw = runtimeResponses(t, h, "PRIVATE", previous, "")
+			if status != 200 || <-captured != oldMarker {
+				t.Fatalf("live history binding: %d %s", status, raw)
+			}
+			if replacement {
+				// All HTTP responses are fully consumed and no model request is
+				// in flight. Install to a new versioned path, never over mmap'd
+				// bytes. First exercise rollback of a failed replacement.
+				atomicFile(t, filepath.Join(pluginDir, "cpa-vibeguard-v0.1.1.so"), []byte("invalid fixture library"))
+				offset := h.changeConfig(t, "priority: 0", "priority: 1")
+				h.awaitLog(t, offset, "failed to load plugin")
+				status, raw = runtimeResponses(t, h, "PRIVATE", previous, "runtime")
+				if status != 200 || <-captured != oldMarker {
+					t.Fatalf("failed replacement did not reactivate the old instance: %d %s", status, raw)
+				}
+				copyPlugin(t, pluginDir, "cpa-vibeguard-v0.1.2.so")
+				offset = h.changeConfig(t, "priority: 1", "priority: 2")
+				h.awaitLog(t, offset, "plugin hot reloaded")
+			} else {
+				h.stop(t)
+				h.start(t)
+			}
+			before := calls.Load()
+			status, raw = runtimeResponses(t, h, "PRIVATE", previous, "runtime")
+			if status != 400 || !bytes.Contains(raw, []byte("session_resolution_failed")) || calls.Load() != before {
+				t.Fatalf("stale history was not rejected: %d %s", status, raw)
+			}
+			status, raw = runtimeResponses(t, h, "PRIVATE", "", "runtime")
+			if status != 200 || !bytes.Contains(raw, []byte("PRIVATE")) || bytes.Contains(raw, []byte(token.Prefix)) {
+				t.Fatalf("new instance roundtrip: %d %s", status, raw)
+			}
+			if marker := <-captured; marker == oldMarker {
+				t.Fatal("fresh instance reused the discarded secret mapping")
+			}
+			status, raw = runtimeResponses(t, h, oldMarker, "", "runtime")
+			if status != 200 || !bytes.Contains(raw, []byte(oldMarker)) || bytes.Contains(raw, []byte("PRIVATE")) || <-captured != oldMarker {
+				t.Fatalf("new instance recovered an unauthorized old marker: %d %s", status, raw)
+			}
+		})
+	}
 }
