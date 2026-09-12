@@ -308,12 +308,22 @@ func (s *Store) Stats() Stats {
 	}
 	return stats
 }
-func (s *Store) Live(key string, generation uint64) bool {
+
+// LiveGenerations prunes once and returns a detached generation snapshot. Batch
+// reference cleanup must not rescan all scopes for every historical response ID.
+// Acquiring a lease still rechecks liveness and generation under the store lock.
+func (s *Store) LiveGenerations() map[string]uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
 	s.prune()
-	c := s.scopes[key]
-	return !s.closed && c != nil && c.generation == generation
+	live := make(map[string]uint64, len(s.scopes))
+	for key, c := range s.scopes {
+		live[key] = c.generation
+	}
+	return live
 }
 func (s *Store) Close() {
 	s.mu.Lock()

@@ -78,7 +78,7 @@ bin/cpa-host --config examples/cpa.yaml
 ```sh
 make check        # 全部单元测试、race、go vet、动态库构建
 make integration  # 固定版 CPA/Caddy 构建、真实 C ABI 和宿主 + mock upstream 测试
-make bench        # 规则、变量缓存、流式延迟与内存计费基准
+make bench        # 规则、变量缓存、流式延迟、内存计费与历史引用基准
 ```
 
 集成测试使用本地合成请求和 mock upstream，无需真实模型账号；构建宿主与 Caddy 时可能下载依赖。测试覆盖协议往返、全部 49 个标记拆分位置、多轮会话、工具参数、重试、并发、取消、配置更新、重启与动态库替换。探针记录的 66 组入口结果在 [testdata/entrypoints.json](testdata/entrypoints.json)。测试只证明本地输入前缀稳定，不证明真实上游 prompt/KV 缓存命中。

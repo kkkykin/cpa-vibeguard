@@ -7,7 +7,7 @@
 ```sh
 make bench
 # 等价于：
-go test ./internal/rules ./internal/restore -run '^$' -bench . -benchmem -benchtime=200ms -cpu=1
+go test ./internal/rules ./internal/restore ./internal/session -run '^$' -bench . -benchmem -benchtime=200ms -cpu=1
 ```
 
 `-cpu=1` 固定 GOMAXPROCS 为 1，不固定 CPU 频率或排除同机负载。下面是一次运行的观测值，用于识别成本与回归，不是吞吐承诺。计时不含基准外的规则加载；扫描过程中仍包含实际检测和 span 合并。
@@ -48,4 +48,23 @@ LongStream 每块包含约 1 KiB 文本及 Chat JSON 包装，每两块跨一个
 
 `B/op` 是一次操作的累计堆分配量。长流的累计分配会随块数增加，即使调用间保留的状态大小不变。以上值均不是 Go 堆峰值或整个 CPA 进程的 RSS；本记录未测量进程 RSS，也不据此推算最大部署并发。容量应结合实际规则、并行输出/工具数、映射内容、宿主开销和配置限额验证。
 
-基准源文件：[规则与变量](../internal/rules/benchmark_test.go)、[还原与流式](../internal/restore/benchmark_test.go)。边界断言及正确性回归仍由对应包的单元测试和真实宿主集成测试负责。
+**历史引用索引。** 2026-09-13 在相同平台和 Go 1.26.0 上，用同一份 `BenchmarkHistoryReferences` 对比 `df4a775` 与本次优化。每组预先登记 8192 条引用，均绑定到第一个持有活动 lease 的会话；其余会话空闲但尚未过期。resolve 续接一条已有引用并释放 lease；record 重复登记一条已有引用。初始化和填充不计时。
+
+```sh
+go test ./internal/session -run '^$' -bench BenchmarkHistoryReferences -benchmem -benchtime=200ms -cpu=1
+```
+
+| 会话数 / 操作 | 优化前 ns/op | 优化后 ns/op | 优化后 B/op | 优化后 allocs/op |
+| --- | ---: | ---: | ---: | ---: |
+| 1 / resolve | 1,142,561 | 694,340 | 384 | 4 |
+| 1 / record | 995,857 | 683,102 | 256 | 2 |
+| 128 / resolve | 15,800,486 | 680,547 | 6,744 | 6 |
+| 128 / record | 16,487,501 | 719,730 | 6,616 | 4 |
+| 1024 / resolve | 144,190,200 | 884,572 | 54,784 | 8 |
+| 1024 / record | 147,150,698 | 870,874 | 54,656 | 6 |
+
+旧实现逐条引用查询存活状态，每次又遍历全部会话；新实现一次获取 generation 快照，将清理成本从 O(引用数 × 会话数) 降为 O(引用数 + 会话数)，并按调用方、引用类型、ID 及 namespace 查询绑定。获取 lease 时仍在 store 锁内核对 generation，避免快照后的淘汰或过期使旧引用绑定新会话。
+
+1024 会话的 resolve 在这次运行中由约 144 毫秒降至 0.885 毫秒，约 163 倍；这是单线程、接近引用条数上限的合成场景，不代表请求吞吐提高相同比例。代价是每次生成存活快照的临时分配（此场景约 54 KiB）；引用索引对两层 map 增加了保守内存计费，仍受 8192 条 / 8 MiB 限额约束。每次操作仍会线性清理引用，并在 resolver 锁下串行执行。
+
+基准源文件：[规则与变量](../internal/rules/benchmark_test.go)、[还原与流式](../internal/restore/benchmark_test.go)、[历史引用](../internal/session/benchmark_test.go)。边界断言及正确性回归仍由对应包的单元测试和真实宿主集成测试负责。

@@ -228,3 +228,32 @@ func TestPossibleMarkerPrefixes(t *testing.T) {
 		}
 	}
 }
+
+func TestLiveGenerationSnapshotExpiryAndIsolation(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := NewStoreWithClock(func() time.Time { return now })
+	defer store.Close()
+	l := Defaults()
+	l.TTL = time.Minute
+	idle := acquire(t, store, "idle", true, l)
+	active := acquire(t, store, "active", true, l)
+	idle.Release()
+	before := store.LiveGenerations()
+	if before["idle"] != idle.Generation() || before["active"] != active.Generation() {
+		t.Fatal("live generation missing")
+	}
+	delete(before, "active")
+	now = now.Add(2 * time.Minute)
+	after := store.LiveGenerations()
+	if len(after) != 1 || after["active"] != active.Generation() {
+		t.Fatal("batch cleanup expired an active lease or retained an idle scope")
+	}
+	recreated := acquire(t, store, "idle", true, l)
+	if recreated.Generation() == idle.Generation() || store.LiveGenerations()["idle"] != recreated.Generation() {
+		t.Fatal("recreated scope reused its previous generation")
+	}
+	store.Close()
+	if len(store.LiveGenerations()) != 0 || after["active"] != active.Generation() {
+		t.Fatal("snapshot changed after store shutdown")
+	}
+}

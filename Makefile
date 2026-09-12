@@ -23,4 +23,4 @@ integration: build
 	go test -tags=integration -count=1 ./tests/integration/...
 
 bench:
-	go test ./internal/rules ./internal/restore -run '^$$' -bench . -benchmem -benchtime=200ms -cpu=1
+	go test ./internal/rules ./internal/restore ./internal/session -run '^$$' -bench . -benchmem -benchtime=200ms -cpu=1

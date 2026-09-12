@@ -36,6 +36,10 @@ type Selection struct {
 	MaxIDBytes        int
 }
 type referenceKey struct{ caller, namespace, kind, id string }
+type lookupKey struct{ caller, kind, id string }
+
+func (k referenceKey) lookup() lookupKey { return lookupKey{k.caller, k.kind, k.id} }
+
 type binding struct {
 	key        string
 	generation uint64
@@ -44,13 +48,14 @@ type binding struct {
 type Resolver struct {
 	mu    sync.Mutex
 	store *token.Store
-	refs  map[referenceKey]binding
+	refs  map[lookupKey]map[string]binding // lookup key -> namespace -> binding
+	count int
 	bytes int
 }
 type Stats struct{ References, Bytes int }
 
 func New(store *token.Store) *Resolver {
-	return &Resolver{store: store, refs: make(map[referenceKey]binding)}
+	return &Resolver{store: store, refs: make(map[lookupKey]map[string]binding)}
 }
 
 func validID(value string, max int) bool {
@@ -188,16 +193,21 @@ func (r *Resolver) Resolve(cfg *config.Config, in Input) (Selection, error) {
 			}
 			var b binding
 			var ns string
-			matches := 0
-			for k, v := range r.refs {
-				if k.caller == caller && k.kind == ref.Kind && k.id == ref.ID && (p == nil || k.namespace == namespace) {
-					b = v
-					ns = k.namespace
-					matches++
+			namespaces := r.refs[lookupKey{caller, ref.Kind, ref.ID}]
+			if p != nil {
+				var exists bool
+				b, exists = namespaces[namespace]
+				if !exists {
+					return Selection{}, errors.New("unknown_or_ambiguous_history_reference")
 				}
-			}
-			if matches != 1 {
-				return Selection{}, errors.New("unknown_or_ambiguous_history_reference")
+				ns = namespace
+			} else {
+				if len(namespaces) != 1 {
+					return Selection{}, errors.New("unknown_or_ambiguous_history_reference")
+				}
+				for name, value := range namespaces {
+					ns, b = name, value
+				}
 			}
 			if (key != "" && key != b.key) || (found && (selected.key != b.key || selected.generation != b.generation)) {
 				return Selection{}, errors.New("history_session_conflict")
@@ -239,7 +249,7 @@ func (r *Resolver) Record(selected Selection, refs []protocol.Reference) error {
 		}
 		k := referenceKey{caller: selected.Caller, namespace: selected.Namespace, kind: ref.Kind, id: ref.ID}
 		b := binding{key: selected.Lease.Key(), generation: selected.Lease.Generation()}
-		if old, exists := r.refs[k]; exists {
+		if old, exists := r.refs[k.lookup()][k.namespace]; exists {
 			if old.key != b.key || old.generation != b.generation {
 				return errors.New("response_reference_conflict")
 			}
@@ -248,24 +258,41 @@ func (r *Resolver) Record(selected Selection, refs []protocol.Reference) error {
 		if _, exists := pending[k]; exists {
 			continue
 		}
-		b.bytes = len(k.caller) + len(k.namespace) + len(k.kind) + len(k.id) + len(b.key) + 128
+		// Charge each reference for both map levels, even when a lookup key
+		// shares its namespace map with another reference.
+		b.bytes = len(k.caller) + len(k.namespace) + len(k.kind) + len(k.id) + len(b.key) + 640
 		extra += b.bytes
 		pending[k] = b
 	}
-	if len(r.refs)+len(pending) > MaxReferences || r.bytes+extra > MaxReferenceBytes {
+	if r.count+len(pending) > MaxReferences || r.bytes+extra > MaxReferenceBytes {
 		return errors.New("history_reference_capacity")
 	}
 	for k, b := range pending {
-		r.refs[k] = b
+		key := k.lookup()
+		if r.refs[key] == nil {
+			r.refs[key] = make(map[string]binding)
+		}
+		r.refs[key][k.namespace] = b
 	}
+	r.count += len(pending)
 	r.bytes += extra
 	return nil
 }
 func (r *Resolver) prune() {
-	for k, b := range r.refs {
-		if !r.store.Live(b.key, b.generation) {
-			delete(r.refs, k)
-			r.bytes -= b.bytes
+	if r.count == 0 {
+		return
+	}
+	live := r.store.LiveGenerations()
+	for key, namespaces := range r.refs {
+		for namespace, b := range namespaces {
+			if generation, exists := live[b.key]; !exists || generation != b.generation {
+				delete(namespaces, namespace)
+				r.bytes -= b.bytes
+				r.count--
+			}
+		}
+		if len(namespaces) == 0 {
+			delete(r.refs, key)
 		}
 	}
 }
@@ -273,11 +300,12 @@ func (r *Resolver) Stats() Stats {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.prune()
-	return Stats{References: len(r.refs), Bytes: r.bytes}
+	return Stats{References: r.count, Bytes: r.bytes}
 }
 func (r *Resolver) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.refs = make(map[referenceKey]binding)
+	r.refs = make(map[lookupKey]map[string]binding)
+	r.count = 0
 	r.bytes = 0
 }

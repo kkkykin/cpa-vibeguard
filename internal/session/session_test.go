@@ -277,3 +277,57 @@ func TestReferenceCapacityAndTransactionalRegistration(t *testing.T) {
 		t.Fatal("close leaked reference bindings")
 	}
 }
+
+func TestHistoryNamespaceIndexAndExpiry(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := token.NewStoreWithClock(func() time.Time { return now })
+	defer store.Close()
+	r := New(store)
+	c := cfg(t, sessionConfig)
+	c.Session.TTL = config.Duration(time.Minute)
+	ref := protocol.Reference{Kind: "response", ID: "shared-id"}
+	var active Selection
+	for _, namespace := range []string{"one", "two"} {
+		c.Session.Profiles[0].Namespace = namespace
+		in := input(namespace)
+		in.Headers = http.Header{"X-Session": {"same-session"}}
+		selected := resolve(t, r, c, in)
+		if err := r.Record(selected, []protocol.Reference{ref}); err != nil {
+			t.Fatal(err)
+		}
+		if namespace == "one" {
+			active = selected
+		} else {
+			selected.Lease.Release()
+		}
+	}
+	if r.Stats().References != 2 {
+		t.Fatal("same reference in distinct namespaces was collapsed")
+	}
+	in := input("continue")
+	in.Previous = []protocol.Reference{ref}
+	c.Session.Profiles[0].Namespace = "one"
+	selected := resolve(t, r, c, in)
+	if selected.Lease.Key() != active.Lease.Key() {
+		t.Fatal("profile resolved a reference from another namespace")
+	}
+	selected.Lease.Release()
+	c.Session.Profiles = nil
+	if _, err := r.Resolve(c, in); err == nil {
+		t.Fatal("ambiguous cross-namespace reference accepted")
+	}
+	now = now.Add(2 * time.Minute)
+	selected = resolve(t, r, c, in)
+	if selected.Namespace != "one" || r.Stats().References != 1 {
+		t.Fatal("expired namespace left a stale ambiguity")
+	}
+	selected.Lease.Release()
+	active.Lease.Release()
+	now = now.Add(2 * time.Minute)
+	if stats := r.Stats(); stats != (Stats{}) {
+		t.Fatalf("expired index retained references or accounting: %+v", stats)
+	}
+	if _, err := r.Resolve(c, in); err == nil {
+		t.Fatal("expired reference created a new scope")
+	}
+}
