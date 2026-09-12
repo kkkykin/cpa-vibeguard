@@ -1,0 +1,16 @@
+{
+    "schema_version": 1,
+    "plugins": [
+        {
+            "id": "cpa-vibeguard",
+            "name": "cpa-vibeguard",
+            "description": "vibeguard.",
+            "author": "kkkykin",
+            "version": "0.1.0",
+            "repository": "https://github.com/kkkykin/cpa-vibeguard",
+            "homepage": "https://github.com/kkkykin/cpa-vibeguard",
+            "license": "MIT",
+            "tags": ["Interceptor", "Security"]
+        }
+    ]
+}
