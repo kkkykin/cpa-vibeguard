@@ -44,7 +44,7 @@ The six delivery steps in PLAN.md are complete for the pinned Linux/amd64 target
    - [x] Full-suite execution exposed CPA's startup interval where `/healthz` responds before the initial watcher reload replaces executors and closes early WebSockets. The test harness now waits for this start's watcher-ready log and HTTP health; log offsets prevent stale readiness after restart. The native/fallback WebSocket and restart/replacement tests pass five repeated runs with this readiness condition.
    - [x] Full tests, race, vet, shared-library/host tests, reconfiguration/restart/replacement, benchmarks, and observed coverage matrix. The final complete host suite passed after fixing startup readiness and explicitly verifying the silent-stream disconnect boundary in both WebSocket execution modes.
 
-Final verification on Linux/amd64 with Go 1.26.0:
+Initial implementation verification on Linux/amd64 with Go 1.26.0 (before the review hardening below):
 
 | Check | Result |
 | --- | --- |
@@ -61,3 +61,16 @@ Final verification on Linux/amd64 with Go 1.26.0:
 The build produced `dist/cpa-vibeguard.so` and `dist/cpa-vibeguard.h`; integration scripts built `bin/cpa-host` from the pinned module and `bin/caddy` v2.10.2. These generated artifacts are intentionally ignored by Git. The host and shared library use the normal build; `make check` instruments the Go core directly for race detection, and the integration race command instruments the Go test process, not those separately built processes/libraries.
 
 Committed evidence includes 15 paired protocol fixtures, five stream fixtures, and 66 observed entrypoint cases. The supported scope remains that in [COVERAGE.md](COVERAGE.md): Alpha Search HTTP routes bypass these hooks, media payloads remain opaque, SDK wrapper fixtures do not imply blanket provider coverage, and Realtime/Live plus the full cachedContent lifecycle are not claimed. Host RPC faults can bypass the plugin; both WebSocket upstream modes can retain an active lease during a silent disconnected stream until the host observes the disconnect. These are recorded host/API boundaries, not pending host modifications.
+
+Review hardening verification on 2026-09-13, Linux/amd64, Go 1.26.8:
+
+| Change | Evidence |
+| --- | --- |
+| Oversized request RPCs reject with HTTP 413 | Native ABI and real-host 9 / 49 MiB request tests verify no upstream call; Caddy enforces its 8 MiB body limit on both routes |
+| Nested custom tool descriptions are scanned | Protocol tests and a real-host custom-tool round trip verify masked descriptions, preserved grammar/name fields and restored tool input |
+| Empty initial MCP arguments retain restoration | Responses/Codex tests cover all 49 marker split positions, completion validation and native stream fixtures |
+| History references use a namespace index and batch liveness snapshot | Race, isolation, expiration, transactional capacity and real-host continuation/restart tests; the comparable benchmark is recorded in [BENCHMARKS.md](BENCHMARKS.md) |
+| Patched toolchain and dependencies | `make check integration vuln` passes; the shared library, CPA and Caddy report Go 1.26.8. Source symbol and binary package scans report zero affected vulnerabilities; the unused OpenPGP package remains a module-level advisory |
+| Verified stable/preview publishing | `make release-check` runs publication policy tests and pinned actionlint. Tests simulate stale commits, run/attempt ordering, previews, upload/API failures and retries; the workflow gates publication on all core, host and vulnerability checks |
+
+Publication policy is checked locally with simulated GitHub API/CLI responses. Actual GitHub publication and repository-side permissions have not been exercised by these tests. The CPA/Caddy fixture dependency graphs remain separate from the plugin vulnerability scan.

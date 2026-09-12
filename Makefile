@@ -1,4 +1,4 @@
-.PHONY: build test race vet check integration bench vuln
+.PHONY: build test race vet check integration bench vuln release-check
 
 VERSION ?= 0.1.0-dev
 
@@ -24,6 +24,10 @@ integration: build
 
 vuln: build
 	bash scripts/check-vulns.sh
+
+release-check:
+	python3 -m unittest discover -s tests/release -v
+	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
 bench:
 	go test ./internal/rules ./internal/restore ./internal/session -run '^$$' -bench . -benchmem -benchtime=200ms -cpu=1

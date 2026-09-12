@@ -6,9 +6,11 @@ cpa-vibeguard 是 CLIProxyAPI（CPA）的原生动态库插件：在请求送往
 
 文档入口：[配置与规则](docs/CONFIGURATION.md) · [会话、升级与故障行为](docs/OPERATIONS.md) · [API 覆盖](docs/COVERAGE.md) · [基准](docs/BENCHMARKS.md) · [验收证据](docs/IMPLEMENTATION.md)。
 
-**自动发布与商店安装。** [Release 工作流](.github/workflows/release.yml) 在每次分支或标签推送时运行，也支持在 Actions 页面手动运行；删除分支或标签不发布。流程通过 `make check` 和真实 C ABI 检查后，发布 Linux/amd64（glibc，Ubuntu 22.04 构建）的正式 Release，并设为 Latest。
+**自动发布与商店安装。** [Release 工作流](.github/workflows/release.yml) 在分支或标签推送时触发，也支持在 Actions 页面手动运行；PR 运行验证，删除引用不发布。只有默认分支当前提交、且运行编号及验证重跑序号比现有自动 Latest 更新的构建，才成为正式 Release / Latest；其他分支、标签及已过期构建发布为预览 Release。产物平台为 Linux/amd64（glibc，Ubuntu 22.04 构建）。
 
-版本取自 `registry.json` 的基础版本，加上运行编号、重跑次数和提交短 SHA，例如 `v0.1.0-build.42.1.gabcdef0`。每次运行生成独立版本，插件注册元数据同步写入去掉 `v` 的版本号。Release 附件遵循 [CPA 插件商店格式](https://help.router-for.me/plugin/development.html#plugin-store-publishing-format)：
+验证任务使用只读仓库权限，须通过 `make check integration vuln release-check` 和版本元数据检查后才交付附件给发布任务。相同引用的新验证会取消旧验证；发布阶段串行执行，并在草稿附件上传完毕后查询默认分支和 Latest 的实时状态，防止旧任务晚完成时覆盖新版本。查询失败时保留草稿。
+
+版本取自 `registry.json` 的基础版本，加上运行编号、验证重跑次数和提交短 SHA，例如 `v0.1.0-build.42.1.gabcdef0`。每次验证尝试生成独立版本，插件注册元数据同步写入去掉 `v` 的版本号。仅重跑发布任务时复用已验证附件和版本：匹配提交的草稿可恢复上传，已公开 Release 保持原发布状态。Release 附件遵循 [CPA 插件商店格式](https://help.router-for.me/plugin/development.html#plugin-store-publishing-format)：
 
 - `cpa-vibeguard_<version>_linux_amd64.zip`：根目录直接包含 `cpa-vibeguard.so`。
 - `checksums.txt`：ZIP 文件的 SHA-256 校验值。
@@ -76,10 +78,11 @@ bin/cpa-host --config examples/cpa.yaml
 **验证与开发。**
 
 ```sh
-make check        # 全部单元测试、race、go vet、动态库构建
-make integration  # 固定版 CPA/Caddy 构建、真实 C ABI 和宿主 + mock upstream 测试
-make vuln         # 固定版 govulncheck 扫描源码及实际动态库，需要网络
-make bench        # 规则、变量缓存、流式延迟、内存计费与历史引用基准
+make check         # 全部单元测试、race、go vet、动态库构建
+make integration   # 固定版 CPA/Caddy 构建、真实 C ABI 和宿主 + mock upstream 测试
+make vuln          # 固定版 govulncheck 扫描源码及实际动态库，需要网络
+make release-check # Python 3 发布策略测试、固定版 actionlint 工作流检查
+make bench         # 规则、变量缓存、流式延迟、内存计费与历史引用基准
 ```
 
 集成测试使用本地合成请求和 mock upstream，无需真实模型账号；构建宿主与 Caddy 时可能下载依赖。测试覆盖协议往返、全部 49 个标记拆分位置、多轮会话、工具参数、重试、并发、取消、配置更新、重启与动态库替换。探针记录的 66 组入口结果在 [testdata/entrypoints.json](testdata/entrypoints.json)。测试只证明本地输入前缀稳定，不证明真实上游 prompt/KV 缓存命中。
