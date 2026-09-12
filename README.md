@@ -24,7 +24,7 @@ plugins:
 
 商店以最新正式 Release 的 tag 为实际版本，`registry.json` 的 `version` 只作显示回退，无需每次自动发布后提交版本变更。当前 Release 仅提供上述平台的预编译包。
 
-**构建与安装。** 当前验证平台为 Linux/amd64，需要 Go 1.26.0、C 编译器和 Make。首次下载依赖需要网络；模块版本已固定，无本地 `replace`。
+**构建与安装。** 当前验证平台为 Linux/amd64，需要 Go 1.26.8、C 编译器和 Make。首次下载依赖需要网络；模块版本已固定，无本地 `replace`。宿主和 Caddy 构建脚本沿用根模块选定的 Go 工具链，缓存的 Caddy 若由旧工具链构建会自动重建。
 
 ```sh
 make build
@@ -62,7 +62,7 @@ bin/cpa-host --config examples/cpa.yaml
 | 插件元数据版本 | 本地构建默认 `0.1.0-dev`；Release 构建使用对应 tag 去掉 `v` 的版本 |
 | CPA | `v7.2.157`，参考提交 `09a29bd345bc44c473abe7fd07859e32df2ea543` |
 | 原生接口 | C ABI 1 / RPC schema 6；注册时拒绝低于 6 的宿主 schema |
-| Go / 平台 | Go `1.26.0`，Linux/amd64，`CGO_ENABLED=1`、`-buildmode=c-shared` |
+| Go / 平台 | Go `1.26.8`，Linux/amd64，`CGO_ENABLED=1`、`-buildmode=c-shared` |
 | Gitleaks | `v8.30.1`，该版本默认启用 222 条官方规则 |
 | 可选前置代理 | 示例已用 Caddy `v2.10.2` 验证；插件本身不依赖 Caddy |
 | 其他 CPA 版本、操作系统和架构 | 尚未验收；不能仅凭 ABI 版本相同推断覆盖范围相同 |
@@ -78,9 +78,12 @@ bin/cpa-host --config examples/cpa.yaml
 ```sh
 make check        # 全部单元测试、race、go vet、动态库构建
 make integration  # 固定版 CPA/Caddy 构建、真实 C ABI 和宿主 + mock upstream 测试
+make vuln         # 固定版 govulncheck 扫描源码及实际动态库，需要网络
 make bench        # 规则、变量缓存、流式延迟、内存计费与历史引用基准
 ```
 
 集成测试使用本地合成请求和 mock upstream，无需真实模型账号；构建宿主与 Caddy 时可能下载依赖。测试覆盖协议往返、全部 49 个标记拆分位置、多轮会话、工具参数、重试、并发、取消、配置更新、重启与动态库替换。探针记录的 66 组入口结果在 [testdata/entrypoints.json](testdata/entrypoints.json)。测试只证明本地输入前缀稳定，不证明真实上游 prompt/KV 缓存命中。
+
+漏洞检查固定使用 `govulncheck v1.8.0`，源码检查可达符号，动态库按链接包检查并读取产物内的实际 Go / 依赖版本；命中会使检查失败。漏洞数据库随时间更新，因此通过结果只对应检查当时的数据。未导入的 `x/crypto/openpgp` 可能仍出现在模块级提示中，不属于插件的调用路径。该目标检查插件；固定 CPA / Caddy 各自模块的依赖图独立于插件 `go.mod`，部署时仍需分别维护。
 
 实施约定保留在 [PLAN.md](PLAN.md)，逐项证据及最终验收记录见 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)。

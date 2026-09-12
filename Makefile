@@ -1,4 +1,4 @@
-.PHONY: build test race vet check integration bench
+.PHONY: build test race vet check integration bench vuln
 
 VERSION ?= 0.1.0-dev
 
@@ -21,6 +21,9 @@ integration: build
 	bash scripts/build-host.sh
 	bash scripts/build-caddy.sh
 	go test -tags=integration -count=1 ./tests/integration/...
+
+vuln: build
+	bash scripts/check-vulns.sh
 
 bench:
 	go test ./internal/rules ./internal/restore ./internal/session -run '^$$' -bench . -benchmem -benchtime=200ms -cpu=1
