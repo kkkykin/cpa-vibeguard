@@ -1,4 +1,7 @@
 :8080 {
+	request_body {
+		max_size 8MiB
+	}
 	handle_path /unmasked/* {
 		reverse_proxy 127.0.0.1:8317 {
 			header_up X-Vibeguard-Skip true

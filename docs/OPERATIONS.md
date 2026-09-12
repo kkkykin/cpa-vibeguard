@@ -92,6 +92,7 @@ Responses WebSocket 已验证原生 upstream WS 和显式 `websockets: false` �
 | --- | --- |
 | `on_unknown_api: reject` | 未注册/缺失输入格式返回 HTTP 400、`unsupported_api` |
 | `on_request_error: reject` | 已知请求的处理错误返回 HTTP 400，成功 RPC envelope 内设置 Terminate，阻止本次上游调用 |
+| 请求 RPC envelope 超过 64 MiB | HTTP 413、`rpc_size_limit`，在分配正文缓冲前返回成功 envelope 中的 Terminate；不受 bypass/passthrough 控制 |
 | 活动请求数达到上限 | HTTP 429、`inflight_limit` |
 | 实例 quiesce/关闭等不可用 | 在钩子仍被调用的前提下，HTTP 503、`plugin_unavailable` |
 | `on_unknown_api: passthrough` | 未支持格式整次放行，无原文映射和响应还原 |
@@ -131,6 +132,9 @@ cpa-vibeguard: reconfigure_rejected; previous configuration retained: "<安全�
 
 ```caddyfile
 :8080 {
+    request_body {
+        max_size 8MiB
+    }
     handle_path /unmasked/* {
         reverse_proxy 127.0.0.1:8317 {
             header_up X-Vibeguard-Skip true

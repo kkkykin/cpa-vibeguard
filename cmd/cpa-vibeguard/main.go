@@ -62,15 +62,22 @@ func cliproxyPluginCall(method *C.char, request *C.uint8_t, n C.size_t, response
 			status = 1
 		}
 	}()
-	if method == nil || n > C.size_t(plugin.MaxRPCBytes) || (n > 0 && request == nil) {
+	if method == nil || (n > 0 && request == nil) {
 		writeResponse(response, plugin.RPCError("invalid_rpc_request"))
 		return 1
 	}
-	var raw []byte
-	if n > 0 {
-		raw = C.GoBytes(unsafe.Pointer(request), C.int(n))
+	name := C.GoString(method)
+	var result []byte
+	if n > C.size_t(plugin.MaxRPCBytes) {
+		result = engine.HandleOversizedRPC(name)
+	} else {
+		var raw []byte
+		if n > 0 {
+			raw = C.GoBytes(unsafe.Pointer(request), C.int(n))
+		}
+		result = engine.Handle(name, raw)
 	}
-	if !writeResponse(response, engine.Handle(C.GoString(method), raw)) {
+	if !writeResponse(response, result) {
 		return 1
 	}
 	return 0

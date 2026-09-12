@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net/http"
 
 	"github.com/kkkykin/cpa-vibeguard/internal/document"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginabi"
@@ -54,10 +55,30 @@ func decodeRPC(raw []byte, dst any) error {
 	return nil
 }
 func (e *Engine) Handle(method string, raw []byte) []byte {
+	if len(raw) > MaxRPCBytes {
+		return e.HandleOversizedRPC(method)
+	}
 	result, err := e.dispatch(method, raw)
 	if err != nil {
 		return RPCError(err.Error())
 	}
+	return rpcResult(result)
+}
+
+// HandleOversizedRPC can be called before copying a native request into Go.
+// CPA skips RPC failures, so request hooks must return a successful business
+// rejection even when the envelope is too large to inspect its ID or headers.
+func (e *Engine) HandleOversizedRPC(method string) []byte {
+	switch method {
+	case pluginabi.MethodRequestInterceptBefore, pluginabi.MethodRequestInterceptAfter:
+		e.metrics.rejected.Add(1)
+		return rpcResult(termination(http.StatusRequestEntityTooLarge, "rpc_size_limit"))
+	default:
+		return RPCError("rpc_size_limit")
+	}
+}
+
+func rpcResult(result any) []byte {
 	body, err := json.Marshal(result)
 	if err != nil {
 		return RPCError("rpc_encode_error")

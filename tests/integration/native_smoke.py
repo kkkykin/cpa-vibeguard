@@ -38,6 +38,10 @@ assert api.abi == 1
 
 def call(method, request, ok=True):
     raw = json.dumps(request).encode()
+    return call_raw(method, raw, ok)
+
+
+def call_raw(method, raw, ok=True):
     buf = Buffer()
     assert api.call(method.encode(), raw, len(raw), c.byref(buf)) == 0
     try:
@@ -64,6 +68,13 @@ if len(sys.argv) > 2:
     assert reg["metadata"]["Version"] == sys.argv[2], reg["metadata"]
 assert reg["schema_version"] == 6
 assert len(reg["capabilities"]) == 4 and all(reg["capabilities"].values())
+oversized = b" " * ((64 << 20) + 1)
+for method in ("request.intercept_before", "request.intercept_after"):
+    denied = call_raw(method, oversized)
+    assert denied["Terminate"] and denied["StatusCode"] == 413, denied
+    assert b"rpc_size_limit" in base64.b64decode(denied["ResponseBody"])
+assert call_raw("response.intercept_after", oversized, ok=False)["code"] == "rpc_size_limit"
+del oversized
 body = base64.b64encode(b"malformed [[redacted:v1:0123456789abcdef0123456789abcdef]]").decode()
 request = {"RequestID": "native-1", "Headers": {"X-Skip": ["yes"]}, "Body": body}
 assert not call("request.intercept_before", request)["Terminate"]

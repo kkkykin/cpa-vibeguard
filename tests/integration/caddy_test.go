@@ -154,4 +154,16 @@ func TestCaddyPrefixAndHeaderBoundary(t *testing.T) {
 	if res.StatusCode != 401 {
 		t.Fatalf("bypass skipped host authentication: %d", res.StatusCode)
 	}
+	for _, path := range []string{"/v1/chat/completions", "/unmasked/v1/chat/completions"} {
+		body := []byte(`{"model":"fixture-chat","messages":[{"role":"user","content":"` + strings.Repeat("x", 9<<20) + `"}]}`)
+		status, _ := requestHTTP(t, "POST", url+path, body, nil)
+		if status != http.StatusRequestEntityTooLarge {
+			t.Fatalf("proxy body limit on %s: HTTP %d", path, status)
+		}
+		select {
+		case <-received:
+			t.Fatalf("oversized proxy request reached upstream on %s", path)
+		default:
+		}
+	}
 }
