@@ -80,7 +80,7 @@ func (d *Document) chatMessage(m map[string]any, path string, request bool) erro
 			return err
 		}
 	}
-	if v, ok := m["tool_calls"]; ok {
+	if v, ok := m["tool_calls"]; ok && v != nil {
 		a, err := array(v, path+"/tool_calls")
 		if err != nil {
 			return err

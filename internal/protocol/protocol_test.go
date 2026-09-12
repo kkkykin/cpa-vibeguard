@@ -117,6 +117,60 @@ func TestRejectInvalidKnownStructures(t *testing.T) {
 	}
 }
 
+func TestChatToolCallsNullAndInvalidValues(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		valid       bool
+	}{
+		{"null", "null", true},
+		{"empty-array", "[]", true},
+		{"object", "{}", false},
+		{"string", `"none"`, false},
+		{"boolean", "false", false},
+		{"number", "0", false},
+		{"null-entry", "[null]", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := `{"role":"assistant","content":"PRIVATE","tool_calls":` + tc.value + `}`
+			for _, request := range []bool{true, false} {
+				raw := `{"choices":[{"message":` + message + `}]}`
+				if request {
+					raw = `{"messages":[` + message + `]}`
+				}
+				d, err := Parse("openai", []byte(raw), request, 1024)
+				if !tc.valid {
+					if err == nil || err == ErrUnknown {
+						t.Fatalf("request=%v: malformed tool_calls must be a processing error: %v", request, err)
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatalf("request=%v: optional tool_calls rejected: %v", request, err)
+				}
+				if len(d.Fields) != 1 || d.Fields[0].Text != "PRIVATE" {
+					t.Fatalf("request=%v: message text was not selected: %+v", request, d.Fields)
+				}
+				d.Fields[0].Set("MASKED")
+				out, err := d.Marshal()
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := document.JSON(out)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want, err := document.JSON([]byte(strings.ReplaceAll(raw, "PRIVATE", "MASKED")))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("request=%v: optional tool_calls changed: %s", request, out)
+				}
+			}
+		})
+	}
+}
+
 func TestToolJSONEscapingAndLimit(t *testing.T) {
 	raw := []byte(`{"input":[{"type":"function_call","arguments":"{\"text\":\"MASKED\",\"array\":[\"MASKED\"],\"number\":9007199254740993}"}]}`)
 	d, err := Parse("openai-response", raw, true, 1024)

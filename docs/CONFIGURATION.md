@@ -23,6 +23,10 @@ limits:
 # 不声明 session：每个请求独立持有映射。
 ```
 
+默认扫描使用 Gitleaks 官方密钥规则；邮箱、手机号、身份证、银行卡和 IP 地址需要额外规则。规则零命中时文本保留原样，属于正常扫描结果，不会触发 `on_request_error: reject`。`preserve_marker_hint: false` 只关闭标记保留提示，不关闭扫描。
+
+官方规则有格式、长度、熵和 allowlist 约束。例如 `sk-proj-abcdefghijklmnopqrstuvwxyz123456` 不符合官方 OpenAI 密钥格式，其中的 `abcdefghijklmnopqrstuvwxyz` 还在官方全局 stopwords 中；添加宽松正则也不能覆盖这个全局忽略条件。这样的占位符原样保留，不能单独用来判断插件是否已启用。
+
 | 配置 | 含义 |
 | --- | --- |
 | `on_unknown_api: reject\|passthrough` | 对缺失/未注册的 CPA SourceFormat 拒绝或整次放行；不把非法正文和未知消息节点当成未知 API |
@@ -68,6 +72,15 @@ YAML 保留 Gitleaks 的字段名和大小写，不另设 snake_case 别名：
 `secretGroup` 指定需要替换的捕获组，未指定时沿用 Gitleaks 的选择语义。keywords 是命中预筛选，不是独立的“全部替换字符串”。插件按 UTF-8 字节精确定位，相交 span 取并集；请求中的 `gitleaks:allow` 注释不能跳过检测，也不额外解码 base64/URL 内容。
 
 正则建议使用 YAML 单引号，以保留 `\b`、`\d` 和反斜杠；多行可用 `|-` 去掉末尾换行。数字、布尔值和 null 不会转换为 regex/keywords 字符串。可选 PII 包 [pii.yaml](../examples/rules/pii.yaml) 包含邮箱和中国大陆手机号规则，只有加入 `rule_sources` 后启用；它不是完整 PII 识别器。
+
+需要同时处理身份证、银行卡和 IPv4 时，可改用 [privacy-text.yaml](../examples/rules/privacy-text.yaml)，它已包含邮箱和手机号规则：
+
+```yaml
+rule_sources:
+  - file: /opt/cpa/rules/privacy-text.yaml
+```
+
+先将文件安装到配置中的绝对路径，再让 CPA 重新配置插件或重启。这些附加规则按文本格式匹配：身份证和银行卡不做校验位验证，银行卡规则也会命中其他 13–19 位数字。它们不等同于旧 Caddy 插件带校验和过滤逻辑的完整内置规则。
 
 **禁用与 allowlist。** 例如：
 

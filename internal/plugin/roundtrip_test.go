@@ -101,6 +101,43 @@ func TestAllProtocolRoundTrips(t *testing.T) {
 	}
 }
 
+func TestChatNullToolCallsRestoration(t *testing.T) {
+	for _, mode := range []string{"response", "stream-snapshot"} {
+		t.Run(mode, func(t *testing.T) {
+			e := configured(t, privateRule)
+			marker := streamRequest(t, e, mode)
+			// OpenAI-compatible providers can serialize absent optional message
+			// fields as null. Preserve them while restoring all selected text.
+			raw := []byte(`{"id":"chatcmpl-fixture","object":"chat.completion","created":1789206025,"model":"omen-alpha","choices":[{"index":0,"finish_reason":"stop","logprobs":null,"message":{"role":"assistant","content":"已记录：\n` + marker + `","name":null,"reasoning_content":"Preserve ` + marker + ` exactly.","reasoning":null,"refusal":null,"audio":null,"function_call":null,"tool_calls":null}}],"usage":{"prompt_tokens":162,"completion_tokens":174,"total_tokens":336,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":null}},"cost":"0"}`)
+			var body []byte
+			if mode == "response" {
+				body = e.Response(pluginapi.ResponseInterceptRequest{RequestID: mode, SourceFormat: "openai", Body: raw}).Body
+			} else {
+				out := e.Stream(pluginapi.StreamChunkInterceptRequest{RequestID: mode, SourceFormat: "openai", Body: raw})
+				if out.DropChunk {
+					t.Fatal("complete response snapshot was dropped")
+				}
+				body = out.Body
+			}
+			if len(body) == 0 || e.Stats().ResponseDegraded != 0 {
+				t.Fatalf("null tool_calls prevented restoration: %s, stats=%+v", body, e.Stats())
+			}
+			got, err := document.JSON(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := document.JSON(bytes.ReplaceAll(raw, []byte(marker), []byte("PRIVATE")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("text was not restored or response metadata changed: %s", body)
+			}
+			e.Complete(mode)
+		})
+	}
+}
+
 func TestIdempotentRetriesAndConfigurationSnapshots(t *testing.T) {
 	e := configured(t, "preserve_marker_hint: true\n"+privateRule)
 	req := pluginapi.RequestInterceptRequest{RequestID: "retry", SourceFormat: "openai", Body: []byte(`{"messages":[{"role":"user","content":"PRIVATE"}]}`)}

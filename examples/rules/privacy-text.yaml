@@ -1,0 +1,21 @@
+# Optional PII text rules. Add this file to rule_sources to enable them.
+# Includes the email/phone rules from pii.yaml; loading both is unnecessary.
+# ID cards and bank cards are matched by shape, without checksum validation.
+# Bank-card candidates include other 13-19 digit numbers.
+rules:
+  - id: pii-email
+    description: Email address
+    regex: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+    keywords: ['@']
+  - id: pii-phone-cn
+    description: Mainland China mobile phone number
+    regex: '\b1[3-9][0-9]{9}\b'
+  - id: pii-id-card-cn
+    description: Mainland China ID card candidate
+    regex: '\b[1-9][0-9]{16}[0-9Xx]\b'
+  - id: pii-bank-card
+    description: Bank card candidate, without Luhn validation
+    regex: '\b[0-9]{13,19}\b'
+  - id: pii-ipv4
+    description: IPv4 address
+    regex: '\b(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\b'
