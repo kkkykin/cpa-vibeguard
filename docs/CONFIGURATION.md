@@ -125,6 +125,8 @@ rule_sources:
 
 此例实际依赖 `X-Tenant` 和环境 `VIBEGUARD_DOMAIN`；其余声明未被规则引用，不要求值存在。环境在配置快照构建时读取；请求值取第一次钩子的 header、脱敏前 JSON 和 metadata，固定至请求结束。JSON 与 metadata 使用 RFC 6901 Pointer，例如 `/metadata/session_id`、`/items/0/name`，`~0` 代表 `~`，`~1` 代表 `/`，不是 JSONPath。
 
+`json` 以业务请求正文为根，`metadata` 以 CPA 单独传给插件的执行上下文为根。例如，正文中的 `metadata.session_id` 应通过 `json: /metadata/session_id` 读取；它不会自动写入宿主 metadata。宿主字段的来源与可用条件见 [CPA metadata 说明](OPERATIONS.md#execution-session-metadata)。
+
 模板仅在启用规则的 regex/keywords 和适用 allowlist 的 regexes/stopwords 中展开。regex 内按字面量转义并用非捕获组包裹，keywords/stopwords 内使用原始值；不会改变原有捕获组编号，也不会把变量当作 YAML/TOML 片段或正则代码。数字量词、Unicode 类、转义花括号继续按正则解释；字符类内或未完成转义处插值报错。规则 ID、路径、数值和描述不做模板展开。
 
 实际依赖的变量缺失、空值、非字符串、header 多值或超限均报错。multipart 请求没有可供 JSON Pointer 读取的业务 JSON，header/metadata 来源仍可使用。静态和动态检测结果不可变；不同绑定不会改写共享检测器。
@@ -149,6 +151,8 @@ session:
 ```
 
 上述数值也是声明 session 后的默认值。更完整的模型前缀与多来源示例见 [examples/session.yaml](../examples/session.yaml)。`profiles` 从前往后选第一个匹配项：`match.source_format` 精确匹配 CPA 输入格式，`match.requested_model_prefix` 匹配请求模型前缀，两者同时声明时须同时满足；省略 match 是兜底项。未命中任何 profile 的普通请求使用请求模式。
+
+示例的前两项读取客户端提供的会话 ID，最后一项读取宿主的 `execution_session_id`。固定版本 CPA 会为每条 Responses WebSocket 连接生成一个 UUID，同连接多轮复用，重连后改变；普通 HTTP（包括 SSE）入口不会自动生成它。因此不能仅靠最后一项为普通 HTTP 开启跨请求复用。生成和传递过程见 [运维说明](OPERATIONS.md#execution-session-metadata)。
 
 选定 profile 后依次取首个有效非空字符串，只有缺失、null、空字符串可以 fallback。非字符串、header 多值、控制字符、首尾空白、非法 UTF-8 或超过 max_id_bytes 都报错，不 trim、不自动解码。选中 ID 尚无映射也不会换来源；不同 ID 不建立别名。相同 namespace、可信调用方、精确 ID 可以跨 header/JSON/metadata 来源复用。
 
