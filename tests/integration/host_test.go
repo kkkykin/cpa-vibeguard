@@ -259,6 +259,49 @@ func TestHostLifecycle(t *testing.T) {
 	}
 }
 
+func TestHostStoreRegistration(t *testing.T) {
+	store, err := os.ReadFile("../../testdata/plugin-store.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	copyPlugin(t, dir, "cpa-vibeguard-v0.1.0.so")
+	h := startHostConfigured(t, hostSettings{
+		PluginDir:    dir,
+		PluginConfig: "      " + strings.ReplaceAll(strings.TrimSpace(string(store)), "\n", "\n      "),
+		Env:          []string{"MANAGEMENT_PASSWORD=fixture-management"},
+	})
+	h.awaitLog(t, 0, "plugin registered")
+	req, err := http.NewRequest("GET", h.url+"/v0/management/plugins", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer fixture-management")
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("plugin management status: %d", resp.StatusCode)
+	}
+	var result struct {
+		PluginsEnabled bool `json:"plugins_enabled"`
+		Plugins        []struct {
+			ID               string `json:"id"`
+			Registered       bool   `json:"registered"`
+			EffectiveEnabled bool   `json:"effective_enabled"`
+		} `json:"plugins"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.PluginsEnabled || len(result.Plugins) != 1 || result.Plugins[0].ID != "cpa-vibeguard" || !result.Plugins[0].Registered || !result.Plugins[0].EffectiveEnabled {
+		t.Fatalf("store-installed plugin did not register and become effective: %+v", result)
+	}
+}
+
 func TestHostProtectedChatAndLegacy(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct{ Messages []struct{ Content string } }

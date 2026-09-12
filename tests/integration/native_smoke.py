@@ -48,7 +48,11 @@ def call(method, request, ok=True):
     return envelope.get("result", envelope.get("error"))
 
 
+store_config = (pathlib.Path(__file__).parents[2] / "testdata/plugin-store.yaml").read_text()
+
+
 def lifecycle(config="", schema=6):
+    config = store_config + "\n" + config
     return {"schema_version": schema,
             "config_yaml": base64.b64encode(config.encode()).decode()}
 
@@ -165,4 +169,4 @@ call("plugin.quiesce", {})
 assert call("request.intercept_before", {"RequestID": "quiesced"})["StatusCode"] == 503
 call("plugin.shutdown", {})
 api.shutdown()
-print("ABI 1 / schema 6: lifecycle, all protocol JSON fixtures, and five stream formats passed")
+print("ABI 1 / schema 6: store configuration, lifecycle, all protocol JSON fixtures, and five stream formats passed")

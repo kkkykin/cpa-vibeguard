@@ -114,6 +114,9 @@ func Parse(raw []byte) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// CPA passes its store installation manifest along with plugin settings.
+	// The host owns this metadata, including its schema and optional fields.
+	delete(m, "store")
 	// Explicit null is not an omission in the configuration language.
 	if err := rejectNull(m, "config"); err != nil {
 		return nil, err

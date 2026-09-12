@@ -2,9 +2,48 @@ package config
 
 import (
 	"net/http"
+	"os"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestHostStoreMetadata(t *testing.T) {
+	store, err := os.ReadFile("../../testdata/plugin-store.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "enabled: true\npriority: 100\non_request_error: passthrough\n"
+	want, err := Parse([]byte(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, store string }{
+		{"manifest", string(store)},
+		{"host extension", strings.Replace(string(store), "store:", "store:\n  future: null\n  on_request_error: reject", 1)},
+		{"empty metadata", "store: null\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Parse([]byte(base + tc.store))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("host metadata changed plugin configuration: got %+v, want %+v", got, want)
+			}
+		})
+	}
+	for _, invalid := range []string{
+		"unexpected: true", "limits: {unknown: 1}", "on_request_error: null", "limits: {max_inflight: '1'}",
+	} {
+		t.Run(invalid, func(t *testing.T) {
+			if _, err := Parse([]byte(string(store) + invalid)); err == nil {
+				t.Fatal("store metadata disabled plugin configuration validation")
+			}
+		})
+	}
+}
 
 func TestDefaultsAndStrictConfig(t *testing.T) {
 	c, err := Parse(nil)

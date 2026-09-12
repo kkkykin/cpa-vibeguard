@@ -1,0 +1,13 @@
+store:
+  id: cpa-vibeguard
+  name: cpa-vibeguard
+  description: Plugin store installation fixture.
+  author: cpa-vibeguard contributors
+  version: 0.1.0
+  release-tag: v0.1.0
+  repository: https://github.com/kkkykin/cpa-vibeguard
+  source-id: source-fixture
+  source-name: Fixture store
+  source-url: https://example.com/plugins/registry.json
+  install:
+    type: github-release

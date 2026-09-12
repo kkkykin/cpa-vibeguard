@@ -1,8 +1,8 @@
 # 配置与规则
 
-以下片段均放在 CPA 的 `plugins.configs.cpa-vibeguard` 下；完整宿主示例见 [examples/cpa.yaml](../examples/cpa.yaml)。`plugins.enabled`、`plugins.dir`、单插件 `enabled` / `priority` 由 CPA 管理。插件不提供 `api` 选择、路径前缀、`fail_open` 或远程规则订阅配置。
+以下片段均放在 CPA 的 `plugins.configs.cpa-vibeguard` 下；完整宿主示例见 [examples/cpa.yaml](../examples/cpa.yaml)。`plugins.enabled`、`plugins.dir`、单插件 `enabled` / `priority` 和商店安装后写入的 `store` 元数据由 CPA 管理。插件在注册和热配置时忽略顶层 `store`，保留宿主对安装来源和版本的管理。插件不提供 `api` 选择、路径前缀、`fail_open` 或远程规则订阅配置。
 
-**默认行为。** 除宿主的 enabled/priority 外，省略配置相当于：
+**默认行为。** 除宿主的 enabled/priority/store 外，省略配置相当于：
 
 ```yaml
 on_unknown_api: reject
@@ -34,7 +34,7 @@ limits:
 | `rule_sources` | 按顺序合并的绝对文件路径或 inline mapping |
 | `session` | 可选的跨请求映射配置，见下文 |
 
-插件严格校验类型、未知字段、null、重复键和 JSON Pointer。直接读取的 YAML 只允许单文档，错误不会转用其他解析器重试。CPA 传入的 inline 按宿主交付的 YAML 结构校验；宿主解析之前已丢失的信息无法由插件恢复。初次无效配置注册失败；无效热配置保留原工作快照并输出诊断，详见[运维文档](OPERATIONS.md)。
+插件自身配置严格校验类型、未知字段、null、重复键和 JSON Pointer；宿主的 `store` 内容不参与插件配置校验。直接读取的 YAML 只允许单文档，错误不会转用其他解析器重试。CPA 传入的 inline 按宿主交付的 YAML 结构校验；宿主解析之前已丢失的信息无法由插件恢复。初次无效配置注册失败；无效热配置保留原工作快照并输出诊断，详见[运维文档](OPERATIONS.md)。
 
 **规则来源与合并。** 默认加载 Gitleaks v8.30.1 的官方规则。外部 `.toml` 使用 Gitleaks TOML，`.yaml` / `.yml` 使用同结构 YAML，扩展名不区分大小写。`file` 必须是 CPA 进程可读的绝对路径。下面同时加载仓库的两个样例，并在末尾追加 inline 规则：
 
