@@ -123,13 +123,23 @@ func (s *Stream) responseSnapshot(m map[string]any) ([]protocol.Reference, error
 	return s.snapshot("response", m)
 }
 func (s *Stream) responseItem(m map[string]any, added bool) error {
-	if added && m["type"] == "function_call" {
+	if added && (m["type"] == "function_call" || m["type"] == "mcp_call") {
 		args, err := str(m, "arguments")
 		if err != nil {
 			return err
 		}
 		if args == "" {
-			return nil
+			// An added item can precede its argument deltas. Validate/restore
+			// other complete fields, but preserve this partial argument slot.
+			value, exists := m["arguments"]
+			m["arguments"] = "{}"
+			defer func() {
+				if exists {
+					m["arguments"] = value
+				} else {
+					delete(m, "arguments")
+				}
+			}()
 		}
 	}
 	_, err := s.snapshot("response_item", m)

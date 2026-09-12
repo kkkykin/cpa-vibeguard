@@ -180,4 +180,4 @@ call("plugin.quiesce", {})
 assert call("request.intercept_before", {"RequestID": "quiesced"})["StatusCode"] == 503
 call("plugin.shutdown", {})
 api.shutdown()
-print("ABI 1 / schema 6: store configuration, lifecycle, all protocol JSON fixtures, and five stream formats passed")
+print("ABI 1 / schema 6: store configuration, lifecycle, all protocol JSON and stream fixtures passed")

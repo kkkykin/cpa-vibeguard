@@ -21,6 +21,18 @@
     ]
   },
   {
+    "name":"codex-mcp-empty-start", "format":"codex", "framing":"json",
+    "request":{"model":"fixture","input":"PRIVATE"},
+    "events":[
+      {"type":"response.output_item.added","output_index":0,"item":{"type":"mcp_call","id":"mcp_fixture","name":"lookup","server_label":"server","arguments":"","output":null}},
+      {"type":"response.mcp_call_arguments.delta","output_index":0,"item_id":"mcp_fixture","delta":"{\"q\":\"@HEAD@"},
+      {"type":"response.mcp_call_arguments.delta","output_index":0,"item_id":"mcp_fixture","delta":"@TAIL@\"}"},
+      {"type":"response.mcp_call_arguments.done","output_index":0,"item_id":"mcp_fixture","arguments":"{\"q\":\"@MARKER@\"}"},
+      {"type":"response.output_item.done","output_index":0,"item":{"type":"mcp_call","id":"mcp_fixture","name":"lookup","server_label":"server","arguments":"{\"q\":\"@MARKER@\"}","output":"@MARKER@"}},
+      {"type":"response.completed","response":{"id":"resp_mcp","output":[{"type":"mcp_call","id":"mcp_fixture","name":"lookup","server_label":"server","arguments":"{\"q\":\"@MARKER@\"}","output":"@MARKER@"}]}}
+    ]
+  },
+  {
     "name":"claude-text-tools", "format":"claude", "framing":"sse",
     "request":{"model":"fixture","max_tokens":256,"messages":[{"role":"user","content":"PRIVATE"}]},
     "events":[
