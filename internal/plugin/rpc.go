@@ -11,7 +11,9 @@ import (
 )
 
 const MaxRPCBytes = 64 << 20
-const Version = "0.1.0-dev"
+
+// Version is set by release builds with -ldflags -X.
+var Version = "0.1.0-dev"
 
 type lifecycleRequest struct {
 	ConfigYAML    []byte `json:"config_yaml"`

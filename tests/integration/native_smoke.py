@@ -56,6 +56,8 @@ def lifecycle(config="", schema=6):
 call("plugin.register", lifecycle(schema=5), ok=False)
 reg = call("plugin.register", lifecycle("bypass: {headers: [{name: X-Skip, present: true}]}"))
 assert reg["metadata"]["Name"] == "cpa-vibeguard"
+if len(sys.argv) > 2:
+    assert reg["metadata"]["Version"] == sys.argv[2], reg["metadata"]
 assert reg["schema_version"] == 6
 assert len(reg["capabilities"]) == 4 and all(reg["capabilities"].values())
 body = base64.b64encode(b"malformed [[redacted:v1:0123456789abcdef0123456789abcdef]]").decode()

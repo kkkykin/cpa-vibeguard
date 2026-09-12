@@ -1,8 +1,10 @@
 .PHONY: build test race vet check integration bench
 
+VERSION ?= 0.1.0-dev
+
 build:
 	mkdir -p dist
-	CGO_ENABLED=1 go build -trimpath -buildmode=c-shared -o dist/cpa-vibeguard.so ./cmd/cpa-vibeguard
+	CGO_ENABLED=1 go build -trimpath -buildmode=c-shared -ldflags "-X github.com/kkkykin/cpa-vibeguard/internal/plugin.Version=$(VERSION)" -o dist/cpa-vibeguard.so ./cmd/cpa-vibeguard
 
 test:
 	go test ./...

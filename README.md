@@ -6,6 +6,24 @@ cpa-vibeguard 是 CLIProxyAPI（CPA）的原生动态库插件：在请求送往
 
 文档入口：[配置与规则](docs/CONFIGURATION.md) · [会话、升级与故障行为](docs/OPERATIONS.md) · [API 覆盖](docs/COVERAGE.md) · [基准](docs/BENCHMARKS.md) · [验收证据](docs/IMPLEMENTATION.md)。
 
+**自动发布与商店安装。** [Release 工作流](.github/workflows/release.yml) 在每次分支或标签推送时运行，也支持在 Actions 页面手动运行；删除分支或标签不发布。流程通过 `make check` 和真实 C ABI 检查后，发布 Linux/amd64（glibc，Ubuntu 22.04 构建）的正式 Release，并设为 Latest。
+
+版本取自 `registry.json` 的基础版本，加上运行编号、重跑次数和提交短 SHA，例如 `v0.1.0-build.42.1.gabcdef0`。每次运行生成独立版本，插件注册元数据同步写入去掉 `v` 的版本号。Release 附件遵循 [CPA 插件商店格式](https://help.router-for.me/plugin/development.html#plugin-store-publishing-format)：
+
+- `cpa-vibeguard_<version>_linux_amd64.zip`：根目录直接包含 `cpa-vibeguard.so`。
+- `checksums.txt`：ZIP 文件的 SHA-256 校验值。
+
+工作流使用 GitHub 自动提供的 `GITHUB_TOKEN` 发布，无需另建 Secret。首个 Release 成功发布后，在 CPA 配置中添加本仓库的商店源，即可通过插件商店安装：
+
+```yaml
+plugins:
+  enabled: true
+  store-sources:
+    - "https://raw.githubusercontent.com/kkkykin/cpa-vibeguard/main/registry.json"
+```
+
+商店以最新正式 Release 的 tag 为实际版本，`registry.json` 的 `version` 只作显示回退，无需每次自动发布后提交版本变更。当前 Release 仅提供上述平台的预编译包。
+
 **构建与安装。** 当前验证平台为 Linux/amd64，需要 Go 1.26.0、C 编译器和 Make。首次下载依赖需要网络；模块版本已固定，无本地 `replace`。
 
 ```sh
@@ -41,7 +59,7 @@ bin/cpa-host --config examples/cpa.yaml
 
 | 项目 | 已验证版本或范围 |
 | --- | --- |
-| 插件元数据版本 | `0.1.0-dev` |
+| 插件元数据版本 | 本地构建默认 `0.1.0-dev`；Release 构建使用对应 tag 去掉 `v` 的版本 |
 | CPA | `v7.2.157`，参考提交 `09a29bd345bc44c473abe7fd07859e32df2ea543` |
 | 原生接口 | C ABI 1 / RPC schema 6；注册时拒绝低于 6 的宿主 schema |
 | Go / 平台 | Go `1.26.0`，Linux/amd64，`CGO_ENABLED=1`、`-buildmode=c-shared` |
