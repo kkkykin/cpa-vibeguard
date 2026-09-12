@@ -172,15 +172,28 @@ func (d *Document) openaiTools(m map[string]any) error {
 					return err
 				}
 				path := pathIndex("/"+key, i)
-				if f, exists := x["function"]; exists {
-					f, err := object(f, path+"/function")
+				// Chat wraps function/custom definitions; Responses also permits
+				// flat definitions. Select exactly one wrapper before visiting text.
+				wrapper := ""
+				for _, name := range []string{"function", "custom"} {
+					if _, exists := x[name]; exists {
+						if wrapper != "" {
+							return errors.New("mixed_tool_definition")
+						}
+						wrapper = name
+					}
+				}
+				if wrapper != "" {
+					if k := kind(x); k != "" && k != wrapper {
+						return errors.New("mixed_tool_definition")
+					}
+					path += "/" + wrapper
+					x, err = object(x[wrapper], path)
 					if err != nil {
 						return err
 					}
-					if err := d.toolDefinition(f, path+"/function"); err != nil {
-						return err
-					}
-				} else if err := d.toolDefinition(x, path); err != nil {
+				}
+				if err := d.toolDefinition(x, path); err != nil {
 					return err
 				}
 			}

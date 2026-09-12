@@ -22,7 +22,7 @@
 
 请求按 SourceFormat 选择适配器，在 CPA 上游翻译之前脱敏。ToFormat 记录上游执行格式，不会触发第二次扫描或由插件再次做协议转换。响应使用该请求的输入格式和固定映射，还原钩子阶段可能早于客户端外层包装。
 
-选定字段包含工具描述，以及 schema 中明确的 description/title；Responses `text.format` 的描述与 JSON schema 文本在请求、普通回显和流式完整快照中处理。模型名、工具名、JSON key、schema property/enum/required/约束、路由标识和数字精度保留。对象工具参数与内嵌 JSON 字符串分别使用 codec，不对所有字符串递归替换。
+选定字段包含工具描述（含 Chat 的 `tools[].custom.description` 和 Responses 的平铺定义），以及 schema 中明确的 description/title；Responses `text.format` 的描述与 JSON schema 文本在请求、普通回显和流式完整快照中处理。模型名、工具名、自定义工具的 grammar 定义、JSON key、schema property/enum/required/约束、路由标识和数字精度保留。对象工具参数与内嵌 JSON 字符串分别使用 codec，不对所有字符串递归替换。
 
 普通/流式 fixture 覆盖中文、换行、引号、反斜杠、超过 2^53 的整数、并行输出和工具、opaque 数据。主要对话流在全部 49 个标记拆分位置验证；也覆盖工具参数逐字节增量、SSE 拆帧、usage、正常尾部和异常 EOF。计数依据脱敏内容，48 字节标记及可选提示会改变 token 数，不能当作原文计数。
 
