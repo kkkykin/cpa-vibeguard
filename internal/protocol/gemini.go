@@ -55,8 +55,16 @@ func (d *Document) geminiRequest() error {
 					if err != nil {
 						return err
 					}
-					if err := d.toolDefinition(f, pathIndex(pathIndex("/tools", i)+"/functionDeclarations", j)); err != nil {
+					path := pathIndex(pathIndex("/tools", i)+"/functionDeclarations", j)
+					if err := d.toolDefinition(f, path); err != nil {
 						return err
+					}
+					for _, key := range []string{"response", "responseJsonSchema"} {
+						if v, ok := f[key]; ok {
+							if err := d.schema(v, path+"/"+key); err != nil {
+								return err
+							}
+						}
 					}
 				}
 			}

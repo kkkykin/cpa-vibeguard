@@ -45,5 +45,40 @@
     "response":{"id":"PRIVATE_ID","output":[],"text":{"verbosity":"low","format":{"type":"json_schema","name":"PRIVATE_SCHEMA","description":"PRIVATE","strict":true,"schema":{"type":"object","title":"PRIVATE","properties":{"PRIVATE_KEY":{"type":"string","description":"PRIVATE","enum":["PRIVATE_ENUM"]}},"required":["PRIVATE_KEY"],"additionalProperties":false}}}},
     "request_fields":["/input","/text/format/description","/text/format/schema/title","/text/format/schema/properties/PRIVATE_KEY/description"],
     "response_fields":["/text/format/description","/text/format/schema/title","/text/format/schema/properties/PRIVATE_KEY/description"]
+  },
+  {
+    "name":"chat-prediction-string","format":"openai",
+    "request":{"model":"PRIVATE_MODEL","messages":[{"role":"user","content":"PRIVATE"}],"prediction":{"type":"content","content":"PRIVATE"}},
+    "response":{"choices":[{"message":{"role":"assistant","content":"PRIVATE"}}]},
+    "request_fields":["/messages/0/content","/prediction/content"],
+    "response_fields":["/choices/0/message/content"]
+  },
+  {
+    "name":"chat-prediction-parts","format":"openai",
+    "request":{"messages":[{"role":"user","content":"PRIVATE"}],"prediction":{"type":"content","content":[{"type":"text","text":"PRIVATE"},{"type":"text","text":"PRIVATE"}]}},
+    "response":{"choices":[{"message":{"role":"assistant","content":"PRIVATE"}}]},
+    "request_fields":["/messages/0/content","/prediction/content/0/text","/prediction/content/1/text"],
+    "response_fields":["/choices/0/message/content"]
+  },
+  {
+    "name":"responses-mcp-description","format":"openai-response",
+    "request":{"input":"PRIVATE","tools":[{"type":"mcp","server_description":"PRIVATE","server_label":"PRIVATE_SERVER","server_url":"https://example.invalid/PRIVATE","headers":{"X-Token":"PRIVATE_AUTH"},"authorization":"PRIVATE_AUTH","allowed_tools":["PRIVATE_TOOL"]}]},
+    "response":{"id":"PRIVATE_ID","output":[],"tools":[{"type":"mcp","server_description":"PRIVATE","server_label":"PRIVATE_SERVER","server_url":"https://example.invalid/PRIVATE","headers":{"X-Token":"PRIVATE_AUTH"},"authorization":"PRIVATE_AUTH","allowed_tools":["PRIVATE_TOOL"]}]},
+    "request_fields":["/input","/tools/0/server_description"],
+    "response_fields":["/tools/0/server_description"]
+  },
+  {
+    "name":"chat-dependent-schemas","format":"openai",
+    "request":{"messages":[{"role":"user","content":"PRIVATE"}],"tools":[{"type":"function","function":{"name":"PRIVATE_TOOL","parameters":{"type":"object","dependentSchemas":{"PRIVATE_KEY":{"description":"PRIVATE","properties":{"PRIVATE_OTHER":{"title":"PRIVATE","enum":["PRIVATE_ENUM"],"default":"PRIVATE_DEFAULT","const":"PRIVATE_CONST"}},"required":["PRIVATE_OTHER"]}},"dependencies":{"PRIVATE_KEY":{"title":"PRIVATE"},"PRIVATE_OTHER":["PRIVATE_KEY"]},"dependentRequired":{"PRIVATE_KEY":["PRIVATE_OTHER"]}}}}]},
+    "response":{"choices":[{"message":{"role":"assistant","content":"PRIVATE"}}]},
+    "request_fields":["/messages/0/content","/tools/0/function/parameters/dependentSchemas/PRIVATE_KEY/description","/tools/0/function/parameters/dependentSchemas/PRIVATE_KEY/properties/PRIVATE_OTHER/title","/tools/0/function/parameters/dependencies/PRIVATE_KEY/title"],
+    "response_fields":["/choices/0/message/content"]
+  },
+  {
+    "name":"gemini-function-response-schema","format":"gemini",
+    "request":{"contents":[{"parts":[{"text":"PRIVATE"}]}],"tools":[{"functionDeclarations":[{"name":"PRIVATE_TOOL","response":{"type":"OBJECT","description":"PRIVATE","properties":{"PRIVATE_KEY":{"type":"STRING","description":"PRIVATE","enum":["PRIVATE_ENUM"]}},"required":["PRIVATE_KEY"]}},{"name":"PRIVATE_JSON_TOOL","responseJsonSchema":{"type":"object","title":"PRIVATE","dependentSchemas":{"PRIVATE_KEY":{"description":"PRIVATE"}}}}]}]},
+    "response":{"candidates":[{"content":{"parts":[{"text":"PRIVATE"}]},"finishReason":"STOP"}]},
+    "request_fields":["/contents/0/parts/0/text","/tools/0/functionDeclarations/0/response/description","/tools/0/functionDeclarations/0/response/properties/PRIVATE_KEY/description","/tools/0/functionDeclarations/1/responseJsonSchema/title","/tools/0/functionDeclarations/1/responseJsonSchema/dependentSchemas/PRIVATE_KEY/description"],
+    "response_fields":["/candidates/0/content/parts/0/text"]
   }
 ]

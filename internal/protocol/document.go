@@ -287,7 +287,7 @@ func (d *Document) schema(v any, path string) error {
 			return err
 		}
 	}
-	for _, key := range []string{"properties", "$defs", "definitions", "patternProperties"} {
+	for _, key := range []string{"properties", "$defs", "definitions", "patternProperties", "dependentSchemas", "dependencies"} {
 		if v, ok := m[key]; ok {
 			defs, err := object(v, path+"/"+key)
 			if err != nil {
@@ -299,15 +299,25 @@ func (d *Document) schema(v any, path string) error {
 			}
 			sort.Strings(keys)
 			for _, k := range keys {
+				// Draft-07 dependencies can be schemas or lists of property
+				// names. Names are constraints, not prose to redact.
+				if names, ok := defs[k].([]any); key == "dependencies" && ok {
+					for _, name := range names {
+						if _, ok := name.(string); !ok {
+							return errors.New("schema_dependency_requires_property_names")
+						}
+					}
+					continue
+				}
 				if err := d.schema(defs[k], path+"/"+key+"/"+k); err != nil {
 					return err
 				}
 			}
 		}
 	}
-	for _, key := range []string{"items", "additionalProperties", "contains", "not", "if", "then", "else"} {
+	for _, key := range []string{"items", "additionalItems", "additionalProperties", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "contentSchema", "contains", "not", "if", "then", "else"} {
 		if v, ok := m[key]; ok {
-			if a, ok := v.([]any); ok {
+			if a, ok := v.([]any); key == "items" && ok {
 				for i, v := range a {
 					if err := d.schema(v, pathIndex(path+"/"+key, i)); err != nil {
 						return err

@@ -45,8 +45,45 @@ func (d *Document) chatRequest() error {
 			}
 		}
 	}
+	if v, exists := m["prediction"]; exists && v != nil {
+		if err := d.chatPrediction(v); err != nil {
+			return err
+		}
+	}
 	return d.openaiTools(m)
 }
+
+func (d *Document) chatPrediction(v any) error {
+	m, err := object(v, "/prediction")
+	if err != nil {
+		return err
+	}
+	if kind(m) != "content" {
+		return errors.New("unsupported_prediction_type")
+	}
+	if _, ok := m["content"].(string); ok {
+		return d.str(m, "content", "/prediction", true)
+	}
+	parts, err := array(m["content"], "/prediction/content")
+	if err != nil {
+		return err
+	}
+	for i, v := range parts {
+		path := pathIndex("/prediction/content", i)
+		part, err := object(v, path)
+		if err != nil {
+			return err
+		}
+		if kind(part) != "text" {
+			return errors.New("unsupported_prediction_content_node")
+		}
+		if err := d.str(part, "text", path, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (d *Document) chatMessage(m map[string]any, path string, request bool) error {
 	if request {
 		role, ok := m["role"].(string)
@@ -190,6 +227,11 @@ func (d *Document) openaiTools(m map[string]any) error {
 					path += "/" + wrapper
 					x, err = object(x[wrapper], path)
 					if err != nil {
+						return err
+					}
+				}
+				if kind(x) == "mcp" {
+					if err := d.str(x, "server_description", path, false); err != nil {
 						return err
 					}
 				}
