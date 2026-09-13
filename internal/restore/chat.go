@@ -8,6 +8,46 @@ import (
 	"github.com/kkkykin/cpa-vibeguard/internal/protocol"
 )
 
+type chatToolKey struct{ choice, tool int }
+
+// A tool's type is commonly sent only in its first delta, which can be empty
+// or metadata-only. Keep that type independently of buffered text fields.
+func (s *Stream) chatToolType(call map[string]any, key chatToolKey) (string, error) {
+	kind, err := str(call, "type")
+	if err != nil {
+		return "", err
+	}
+	if kind != "" && kind != "function" && kind != "custom" {
+		return "", errors.New("unsupported_chat_stream_tool")
+	}
+	wrapper := ""
+	for _, name := range []string{"function", "custom"} {
+		if call[name] != nil {
+			if wrapper != "" || (kind != "" && kind != name) {
+				return "", errors.New("mixed_chat_stream_tool")
+			}
+			wrapper = name
+		}
+	}
+	if wrapper != "" {
+		kind = wrapper
+	}
+	previous := s.chatTools[key]
+	if kind == "" {
+		return previous, nil
+	}
+	if previous != "" && previous != kind {
+		return "", errors.New("chat_stream_tool_type_changed")
+	}
+	if previous == "" {
+		if len(s.chatTools) >= MaxStreamFields {
+			return "", errors.New("stream_tool_limit")
+		}
+		s.chatTools[key] = kind
+	}
+	return kind, nil
+}
+
 func (s *Stream) chat(root map[string]any) ([]map[string]any, []protocol.Reference, error) {
 	choices, err := arr(root["choices"])
 	if err != nil {
@@ -121,15 +161,19 @@ func (s *Stream) chatDelta(m map[string]any, group string, i int) error {
 			if err != nil {
 				return err
 			}
-			kind, err := str(call, "type")
+			if s.closed[group] {
+				return errors.New("stream_delta_after_close")
+			}
+			field, err := s.chatToolType(call, chatToolKey{choice: i, tool: j})
 			if err != nil {
 				return err
 			}
-			field, key, tool := "function", "arguments", true
-			if kind == "custom" {
-				field, key, tool = "custom", "input", false
-			} else if kind != "" && kind != "function" {
-				return errors.New("unsupported_chat_stream_tool")
+			if field == "" {
+				continue
+			}
+			key, tool := "arguments", true
+			if field == "custom" {
+				key, tool = "input", false
 			}
 			if v := call[field]; v != nil {
 				f, err := obj(v)

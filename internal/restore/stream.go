@@ -27,6 +27,7 @@ type Stream struct {
 	closed                         map[string]bool
 	aliases                        map[string]string
 	aliasBytes                     int
+	chatTools                      map[chatToolKey]string
 	arrayStarted, arrayItem, ended bool
 	budget                         int
 	budgetExceeded                 bool
@@ -57,13 +58,15 @@ type tail struct {
 func NewStream(format string, limits config.Limits, lookup Lookup) *Stream {
 	return &Stream{format: format, limits: limits, lookup: lookup,
 		framer: Framer{Limit: limits.EventBytes, Records: true}, fields: make(map[string]*streamField),
-		closed: make(map[string]bool), aliases: make(map[string]string)}
+		closed: make(map[string]bool), aliases: make(map[string]string), chatTools: make(map[chatToolKey]string)}
 }
 
 // Buffered includes cached field coordinates and completed-field tombstones.
 // The caller subtracts its cached redacted request from RequestStateBytes.
 func (s *Stream) Buffered() int {
-	n := s.framer.Buffered() + s.aliasBytes
+	// Chat tool metadata contains only two integer coordinates and one of
+	// two fixed type names, including when no text field has started yet.
+	n := s.framer.Buffered() + s.aliasBytes + 64*len(s.chatTools)
 	for k, f := range s.fields {
 		n += 512 + len(k) + len(f.group) + len(f.delivery.itemID)
 		if f.text != nil {
@@ -92,6 +95,7 @@ func (s *Stream) Abort() {
 	s.closed = nil
 	s.aliases = nil
 	s.aliasBytes = 0
+	s.chatTools = nil
 	s.ended = true
 }
 func (s *Stream) resolve(marker string) (string, bool) {
