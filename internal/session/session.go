@@ -3,6 +3,7 @@
 package session
 
 import (
+	"container/list"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -22,6 +23,12 @@ import (
 
 const MaxReferences = 8192
 const MaxReferenceBytes = 8 << 20
+const MaxCallerReferences = 1024
+const MaxCallerReferenceBytes = 1 << 20
+
+// ErrReferenceCapacity means a validated batch cannot fit in the history
+// index. It does not invalidate the current request's leased secret mapping.
+var ErrReferenceCapacity = errors.New("history_reference_capacity")
 
 type Input struct {
 	RequestID, SourceFormat, RequestedModel string
@@ -41,21 +48,28 @@ type lookupKey struct{ caller, kind, id string }
 func (k referenceKey) lookup() lookupKey { return lookupKey{k.caller, k.kind, k.id} }
 
 type binding struct {
-	key        string
-	generation uint64
-	bytes      int
+	key                  string
+	generation           uint64
+	bytes                int
+	recent, callerRecent *list.Element
+}
+type callerReferences struct {
+	recent list.List
+	bytes  int
 }
 type Resolver struct {
-	mu    sync.Mutex
-	store *token.Store
-	refs  map[lookupKey]map[string]binding // lookup key -> namespace -> binding
-	count int
-	bytes int
+	mu      sync.Mutex
+	store   *token.Store
+	refs    map[lookupKey]map[string]*binding // lookup key -> namespace -> binding
+	recent  list.List
+	callers map[string]*callerReferences
+	count   int
+	bytes   int
 }
 type Stats struct{ References, Bytes int }
 
 func New(store *token.Store) *Resolver {
-	return &Resolver{store: store, refs: make(map[lookupKey]map[string]binding)}
+	return &Resolver{store: store, refs: make(map[lookupKey]map[string]*binding), callers: make(map[string]*callerReferences)}
 }
 
 func validID(value string, max int) bool {
@@ -185,13 +199,14 @@ func (r *Resolver) Resolve(cfg *config.Config, in Input) (Selection, error) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		r.prune()
-		var selected binding
+		var selected *binding
+		var used []*binding
 		found := false
 		for _, ref := range in.Previous {
 			if !validID(ref.ID, s.MaxIDBytes) {
 				return Selection{}, errors.New("invalid_history_reference")
 			}
-			var b binding
+			var b *binding
 			var ns string
 			namespaces := r.refs[lookupKey{caller, ref.Kind, ref.ID}]
 			if p != nil {
@@ -213,12 +228,17 @@ func (r *Resolver) Resolve(cfg *config.Config, in Input) (Selection, error) {
 				return Selection{}, errors.New("history_session_conflict")
 			}
 			selected = b
+			used = append(used, b)
 			namespace = ns
 			found = true
 		}
 		lease, err := r.store.AcquireGeneration(selected.key, selected.generation, l)
 		if err != nil {
 			return Selection{}, err
+		}
+		// Failed or conflicting history requests must not refresh retention.
+		for _, b := range used {
+			r.touch(caller, b)
 		}
 		return Selection{Lease: lease, Namespace: namespace, Caller: caller, MaxIDBytes: s.MaxIDBytes}, nil
 	}
@@ -232,8 +252,10 @@ func (r *Resolver) Resolve(cfg *config.Config, in Input) (Selection, error) {
 	return Selection{Lease: lease, Namespace: namespace, Caller: caller, MaxIDBytes: s.MaxIDBytes}, err
 }
 
-// Record validates the entire batch before publishing any binding. The scope
-// generation prevents old references from rebinding after an ID is reused.
+// Record validates the entire batch before publishing or evicting bindings.
+// Valid batches refresh LRU retention; both global and per-caller limits apply
+// to references independently of secret mapping leases. The scope generation
+// prevents old references from rebinding after a session ID is reused.
 func (r *Resolver) Record(selected Selection, refs []protocol.Reference) error {
 	if selected.Lease == nil || !selected.Lease.Persistent() || len(refs) == 0 {
 		return nil
@@ -241,43 +263,105 @@ func (r *Resolver) Record(selected Selection, refs []protocol.Reference) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.prune()
-	pending := make(map[referenceKey]binding)
-	extra := 0
+	batch := make(map[referenceKey]*binding)
+	order := make([]referenceKey, 0, min(len(refs), MaxCallerReferences))
+	batchBytes, overCapacity := 0, false
+	scope, generation := selected.Lease.Key(), selected.Lease.Generation()
 	for _, ref := range refs {
 		if !validID(ref.ID, selected.MaxIDBytes) {
 			return errors.New("invalid_response_reference")
 		}
 		k := referenceKey{caller: selected.Caller, namespace: selected.Namespace, kind: ref.Kind, id: ref.ID}
-		b := binding{key: selected.Lease.Key(), generation: selected.Lease.Generation()}
-		if old, exists := r.refs[k.lookup()][k.namespace]; exists {
-			if old.key != b.key || old.generation != b.generation {
+		b, exists := r.refs[k.lookup()][k.namespace]
+		if exists {
+			if b.key != scope || b.generation != generation {
 				return errors.New("response_reference_conflict")
 			}
+		}
+		// Keep staging bounded, but still validate the rest of an oversized
+		// batch so capacity cannot hide malformed IDs or binding conflicts.
+		if overCapacity {
 			continue
 		}
-		if _, exists := pending[k]; exists {
+		if _, exists := batch[k]; exists {
 			continue
 		}
-		// Charge each reference for both map levels, even when a lookup key
-		// shares its namespace map with another reference.
-		b.bytes = len(k.caller) + len(k.namespace) + len(k.kind) + len(k.id) + len(b.key) + 640
-		extra += b.bytes
-		pending[k] = b
+		if b == nil {
+			b = &binding{key: scope, generation: generation}
+			// Charge both map levels, both LRU nodes, and caller accounting,
+			// even when those structures share strings or namespace maps.
+			b.bytes = len(k.caller) + len(k.namespace) + len(k.kind) + len(k.id) + len(b.key) + 896
+		}
+		if len(batch) >= MaxCallerReferences || b.bytes > MaxCallerReferenceBytes-batchBytes {
+			overCapacity = true
+			continue
+		}
+		batch[k] = b
+		order = append(order, k)
+		batchBytes += b.bytes
 	}
-	if r.count+len(pending) > MaxReferences || r.bytes+extra > MaxReferenceBytes {
-		return errors.New("history_reference_capacity")
+	if overCapacity {
+		return ErrReferenceCapacity
 	}
-	for k, b := range pending {
+	for _, k := range order {
+		b := batch[k]
+		if b.recent != nil {
+			r.touch(k.caller, b)
+			continue
+		}
+		caller := r.callers[k.caller]
+		if caller == nil {
+			caller = &callerReferences{}
+			r.callers[k.caller] = caller
+		}
+		b.recent = r.recent.PushBack(k)
+		b.callerRecent = caller.recent.PushBack(b.recent)
+		caller.bytes += b.bytes
 		key := k.lookup()
 		if r.refs[key] == nil {
-			r.refs[key] = make(map[string]binding)
+			r.refs[key] = make(map[string]*binding)
 		}
 		r.refs[key][k.namespace] = b
+		r.count++
+		r.bytes += b.bytes
 	}
-	r.count += len(pending)
-	r.bytes += extra
+	// Every batch member is now newer than all eviction candidates, and the
+	// batch itself fits both budgets. Eviction cannot remove a batch member.
+	caller := r.callers[selected.Caller]
+	for caller.recent.Len() > MaxCallerReferences || caller.bytes > MaxCallerReferenceBytes {
+		oldest := caller.recent.Front().Value.(*list.Element)
+		r.remove(oldest.Value.(referenceKey))
+	}
+	for r.count > MaxReferences || r.bytes > MaxReferenceBytes {
+		r.remove(r.recent.Front().Value.(referenceKey))
+	}
 	return nil
 }
+
+func (r *Resolver) touch(caller string, b *binding) {
+	r.recent.MoveToBack(b.recent)
+	r.callers[caller].recent.MoveToBack(b.callerRecent)
+}
+
+func (r *Resolver) remove(k referenceKey) {
+	key := k.lookup()
+	namespaces := r.refs[key]
+	b := namespaces[k.namespace]
+	delete(namespaces, k.namespace)
+	if len(namespaces) == 0 {
+		delete(r.refs, key)
+	}
+	r.recent.Remove(b.recent)
+	caller := r.callers[k.caller]
+	caller.recent.Remove(b.callerRecent)
+	caller.bytes -= b.bytes
+	if caller.recent.Len() == 0 {
+		delete(r.callers, k.caller)
+	}
+	r.count--
+	r.bytes -= b.bytes
+}
+
 func (r *Resolver) prune() {
 	if r.count == 0 {
 		return
@@ -286,13 +370,8 @@ func (r *Resolver) prune() {
 	for key, namespaces := range r.refs {
 		for namespace, b := range namespaces {
 			if generation, exists := live[b.key]; !exists || generation != b.generation {
-				delete(namespaces, namespace)
-				r.bytes -= b.bytes
-				r.count--
+				r.remove(referenceKey{caller: key.caller, namespace: namespace, kind: key.kind, id: key.id})
 			}
-		}
-		if len(namespaces) == 0 {
-			delete(r.refs, key)
 		}
 	}
 }
@@ -305,7 +384,9 @@ func (r *Resolver) Stats() Stats {
 func (r *Resolver) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.refs = make(map[lookupKey]map[string]binding)
+	r.refs = make(map[lookupKey]map[string]*binding)
+	r.recent.Init()
+	r.callers = make(map[string]*callerReferences)
 	r.count = 0
 	r.bytes = 0
 }

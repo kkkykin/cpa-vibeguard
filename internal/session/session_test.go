@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -253,27 +254,31 @@ func TestReferenceCapacityAndTransactionalRegistration(t *testing.T) {
 	in := input("many")
 	in.Headers = http.Header{"X-Session": {"same"}}
 	s := resolve(t, r, c, in)
-	refs := make([]protocol.Reference, MaxReferences+1)
+	refs := make([]protocol.Reference, MaxCallerReferences+1)
 	for i := range refs {
 		refs[i] = protocol.Reference{Kind: "response", ID: fmt.Sprintf("r-%d", i)}
 	}
-	if err := r.Record(s, refs); err == nil {
-		t.Fatal("reference capacity ignored")
+	if err := r.Record(s, refs); !errors.Is(err, ErrReferenceCapacity) {
+		t.Fatalf("oversized reference batch accepted: %v", err)
 	}
 	if r.Stats().References != 0 {
 		t.Fatal("partial reference batch published")
 	}
-	if err := r.Record(s, refs[:MaxReferences]); err != nil {
+	if err := r.Record(s, refs[:MaxCallerReferences]); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Record(s, refs[MaxReferences:]); err == nil {
-		t.Fatal("reference capacity ignored")
+	if err := r.Record(s, refs[MaxCallerReferences:]); err != nil {
+		t.Fatalf("full reference cache did not evict: %v", err)
 	}
-	if stats := r.Stats(); stats.References != MaxReferences || stats.Bytes > MaxReferenceBytes {
+	if stats := r.Stats(); stats.References != MaxCallerReferences || stats.Bytes > MaxCallerReferenceBytes {
 		t.Fatal(stats)
 	}
+	in.Previous = refs[:1]
+	if _, err := r.Resolve(c, in); err == nil {
+		t.Fatal("evicted history rebound through an explicit session ID")
+	}
 	r.Close()
-	if r.Stats().References != 0 {
+	if r.Stats().References != 0 || r.recent.Len() != 0 || len(r.callers) != 0 {
 		t.Fatal("close leaked reference bindings")
 	}
 }
@@ -326,6 +331,9 @@ func TestHistoryNamespaceIndexAndExpiry(t *testing.T) {
 	now = now.Add(2 * time.Minute)
 	if stats := r.Stats(); stats != (Stats{}) {
 		t.Fatalf("expired index retained references or accounting: %+v", stats)
+	}
+	if r.recent.Len() != 0 || len(r.callers) != 0 {
+		t.Fatal("expired references retained LRU or caller accounting")
 	}
 	if _, err := r.Resolve(c, in); err == nil {
 		t.Fatal("expired reference created a new scope")

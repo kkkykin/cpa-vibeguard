@@ -49,10 +49,11 @@ type requestState struct {
 	stream        *restore.Stream
 	streamStopped bool
 }
-type counters struct{ header, unknown, requestError, rejected, protected, degraded atomic.Uint64 }
+type counters struct{ header, unknown, requestError, rejected, protected, degraded, historyCapacity atomic.Uint64 }
 type Stats struct {
 	Inflight                                                                                         int
 	HeaderBypass, UnknownPassthrough, RequestErrorPassthrough, Rejected, Protected, ResponseDegraded uint64
+	HistoryCapacitySkipped                                                                           uint64
 }
 
 type Engine struct {
@@ -322,11 +323,23 @@ func (e *Engine) Response(req pluginapi.ResponseInterceptRequest) pluginapi.Resp
 	if err != nil || len(body) > cfg.Limits.ResponseBytes {
 		return fail()
 	}
-	if err := e.sessions.Record(s.selection, doc.ResponseIDs); err != nil {
+	if err := e.recordReferences(s.selection, doc.ResponseIDs); err != nil {
 		return fail()
 	}
 	return pluginapi.ResponseInterceptResponse{Body: body}
 }
+
+func (e *Engine) recordReferences(selected session.Selection, refs []protocol.Reference) error {
+	err := e.sessions.Record(selected, refs)
+	if errors.Is(err, session.ErrReferenceCapacity) {
+		// The current response uses its leased mapping independently of
+		// history retention. Future unrecorded references still fail closed.
+		e.metrics.historyCapacity.Add(1)
+		return nil
+	}
+	return err
+}
+
 func (e *Engine) degrade(s *requestState) {
 	if !s.degraded {
 		s.degraded = true
@@ -370,7 +383,7 @@ func (e *Engine) Stream(req pluginapi.StreamChunkInterceptRequest) pluginapi.Str
 	if err != nil {
 		return fail()
 	}
-	if err := e.sessions.Record(s.selection, ids); err != nil {
+	if err := e.recordReferences(s.selection, ids); err != nil {
 		return fail()
 	}
 	return pluginapi.StreamChunkInterceptResponse{Body: body, DropChunk: len(body) == 0}
@@ -433,5 +446,5 @@ func (e *Engine) Stats() Stats {
 	e.mu.Lock()
 	n := len(e.requests)
 	e.mu.Unlock()
-	return Stats{Inflight: n, HeaderBypass: e.metrics.header.Load(), UnknownPassthrough: e.metrics.unknown.Load(), RequestErrorPassthrough: e.metrics.requestError.Load(), Rejected: e.metrics.rejected.Load(), Protected: e.metrics.protected.Load(), ResponseDegraded: e.metrics.degraded.Load()}
+	return Stats{Inflight: n, HeaderBypass: e.metrics.header.Load(), UnknownPassthrough: e.metrics.unknown.Load(), RequestErrorPassthrough: e.metrics.requestError.Load(), Rejected: e.metrics.rejected.Load(), Protected: e.metrics.protected.Load(), ResponseDegraded: e.metrics.degraded.Load(), HistoryCapacitySkipped: e.metrics.historyCapacity.Load()}
 }

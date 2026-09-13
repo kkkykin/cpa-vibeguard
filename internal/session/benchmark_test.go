@@ -36,8 +36,17 @@ func BenchmarkHistoryReferences(b *testing.B) {
 					refs[i] = protocol.Reference{Kind: "response", ID: fmt.Sprintf("resp-%d", i)}
 				}
 				selection := Selection{Lease: first, Namespace: "bench", Caller: "caller", MaxIDBytes: 1024}
-				if err := r.Record(selection, refs); err != nil {
-					b.Fatal(err)
+				// Keep the global index full while respecting each caller's
+				// reference quota. All bindings use the same scope for this
+				// index benchmark; the store's session count varies separately.
+				for start := 0; start < len(refs); start += MaxCallerReferences {
+					owner := selection
+					if start > 0 {
+						owner.Caller = fmt.Sprintf("caller-%d", start)
+					}
+					if err := r.Record(owner, refs[start:min(start+MaxCallerReferences, len(refs))]); err != nil {
+						b.Fatal(err)
+					}
 				}
 				in := Input{RequestID: "next", SourceFormat: "openai-response", Metadata: map[string]any{"caller_scope": "caller"}, Previous: refs[:1]}
 				b.ReportAllocs()
