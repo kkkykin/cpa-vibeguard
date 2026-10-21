@@ -43,6 +43,12 @@
 
 xAI 图像的“流式”结果由 CPA 在普通响应钩子之后合成，探针没有观察到相应的流块钩子，而且宿主合成结果不包含 revised_prompt；不能据此宣称逐块文本还原。compatible/Codex 图像生成的 SSE 路径则实测进入流式钩子。multipart 不虚构业务 JSON，JSON Pointer 的变量/session 来源不可由上传表单猜出，header/metadata 来源可用。
 
+工具结果中的已知媒体节点也使用协议字段选择，包括 Responses/Codex 的 `function_call_output`、`custom_tool_call_output`、嵌套 MCP content，以及 Interactions 的 `function_result`。节点中的载荷、URL、文件名和类型保留，文本节点继续脱敏。任意工具参数中的 `type` 属性不会自行改变字段含义。
+
+文本或工具字符串内的合法 `data:...;base64,...` URI 整段保留，URI 外的文本继续扫描。裸 base64 只有带可识别的图片或 PDF 文件头才跳过，支持 PNG、JPEG、GIF、WebP、BMP、TIFF、ICO、AVIF/HEIF 和 PDF；编码支持标准及 URL-safe 字母表、有无 padding，以及独立文件值的 CR/LF 折行。data URI 支持百分号转义。只校验编码和少量文件头，不解码扫描完整载荷，也不校验整张图片的有效性。普通 API key 不因符合 base64 字符集而被跳过；其他未标明类型的裸 base64 仍作为文本处理，传递这类文件时应使用协议媒体节点或带 MIME 类型的 data URI。
+
+回归测试使用可正常解码、base64 中含手机号形状的 PNG，检查媒体字节不变且周围手机号仍被脱敏，另经真实宿主验证 Markdown 图片、工具参数和字符串形式工具结果的普通/流式往返。媒体仍计入请求、响应及流事件大小限额。
+
 **SDK 格式、可解释文本与未覆盖内容。**
 
 | 范围 | 证据与限制 |

@@ -200,23 +200,32 @@ func (d *Document) str(m map[string]any, key, path string, required bool) error 
 	return nil
 }
 func (d *Document) strings(v any, set func(any), path string) error {
+	return d.visitStrings(v, set, path, false)
+}
+
+func (d *Document) visitStrings(v any, set func(any), path string, result bool) error {
 	switch x := v.(type) {
 	case string:
 		d.Fields = append(d.Fields, Field{Path: path, Text: x, set: func(s string) { set(s) }})
 	case map[string]any:
+		if result {
+			if handled, err := d.resultPart(x, path); handled {
+				return err
+			}
+		}
 		keys := make([]string, 0, len(x))
 		for k := range x {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			if err := d.strings(x[k], func(v any) { x[k] = v }, path+"/"+k); err != nil {
+			if err := d.visitStrings(x[k], func(v any) { x[k] = v }, path+"/"+k, result); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for i := range x {
-			if err := d.strings(x[i], func(v any) { x[i] = v }, pathIndex(path, i)); err != nil {
+			if err := d.visitStrings(x[i], func(v any) { x[i] = v }, pathIndex(path, i), result); err != nil {
 				return err
 			}
 		}
@@ -272,7 +281,7 @@ func (d *Document) toolResult(m map[string]any, key, path string) error {
 	if !exists {
 		return fmt.Errorf("tool_result_required: %s/%s", path, key)
 	}
-	return d.strings(v, func(v any) { m[key] = v }, path+"/"+key)
+	return d.visitStrings(v, func(v any) { m[key] = v }, path+"/"+key, true)
 }
 func (d *Document) schema(v any, path string) error {
 	if _, ok := v.(bool); ok {

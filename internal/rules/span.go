@@ -24,9 +24,44 @@ func (b *Bound) scan(ctx context.Context, text string) ([]Span, error) {
 	if !utf8.ValidString(text) {
 		return nil, errors.New("scan_invalid_utf8")
 	}
+	opaque := encodedMedia(text)
+	if len(opaque) > MaxScanMatches {
+		return nil, errors.New("scan_media_limit")
+	}
+	remaining := MaxScanMatches
+	var spans []Span
+	start := 0
+	// Scan separate text fragments so even a broad or multiline rule cannot
+	// cover the payload or join secrets on opposite sides of an image.
+	for i := 0; i <= len(opaque); i++ {
+		end := len(text)
+		if i < len(opaque) {
+			end = opaque[i].Start
+		}
+		if start < end {
+			found, err := b.scanText(ctx, text[start:end], &remaining)
+			if err != nil {
+				return nil, err
+			}
+			for _, span := range found {
+				span.Start += start
+				span.End += start
+				spans = append(spans, span)
+			}
+		}
+		if i < len(opaque) {
+			start = opaque[i].End
+		}
+	}
+	if ctx.Err() != nil {
+		return nil, errors.New("scan_canceled")
+	}
+	return spans, nil
+}
+
+func (b *Bound) scanText(ctx context.Context, text string, remaining *int) ([]Span, error) {
 	// The library returns a complete finding slice. Bound that allocation before
 	// entering it, without dropping any part of a scan that was accepted.
-	remaining := MaxScanMatches
 	lower := strings.ToLower(text)
 	for _, r := range b.rules {
 		if ctx.Err() != nil {
@@ -47,8 +82,8 @@ func (b *Bound) scan(ctx context.Context, text string) ([]Span, error) {
 				continue
 			}
 		}
-		remaining -= len(r.Regex.FindAllStringIndex(text, remaining+1))
-		if remaining < 0 {
+		*remaining -= len(r.Regex.FindAllStringIndex(text, *remaining+1))
+		if *remaining < 0 {
 			return nil, errors.New("scan_match_limit")
 		}
 	}

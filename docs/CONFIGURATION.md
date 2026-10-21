@@ -69,7 +69,9 @@ YAML 保留 Gitleaks 的字段名和大小写，不另设 snake_case 别名：
 
 兼容范围是 v8 文本检测规则。仓库路径、commit、递归 extend、required、skipReport 等未覆盖字段会报错。`minVersion` 不能要求高于固定 Gitleaks 版本。旧式单数 allowlist 会归一化；同层同时声明非空单数/复数内容会报错。插件提供 YAML 表示，不要求 Gitleaks CLI 支持 YAML。
 
-`secretGroup` 指定需要替换的捕获组，未指定时沿用 Gitleaks 的选择语义。keywords 是命中预筛选，不是独立的“全部替换字符串”。插件按 UTF-8 字节精确定位，相交 span 取并集；请求中的 `gitleaks:allow` 注释不能跳过检测，也不额外解码 base64/URL 内容。
+`secretGroup` 指定需要替换的捕获组，未指定时沿用 Gitleaks 的选择语义。keywords 是命中预筛选，不是独立的“全部替换字符串”。插件按 UTF-8 字节精确定位，相交 span 取并集；请求中的 `gitleaks:allow` 注释不能跳过检测，不对 base64/URL 的解码内容执行秘密扫描。
+
+文本中的合法 base64 data URI，以及带可识别图片/PDF 文件头的裸 base64，在扫描前作为载荷保留；仅检查编码和少量文件头。其前后文本分别扫描，即使规则可跨行匹配也不会覆盖载荷。普通 base64 形状的 API key 仍会扫描；具体格式和边界见[媒体覆盖说明](COVERAGE.md)。
 
 正则建议使用 YAML 单引号，以保留 `\b`、`\d` 和反斜杠；多行可用 `|-` 去掉末尾换行。数字、布尔值和 null 不会转换为 regex/keywords 字符串。可选 PII 包 [pii.yaml](../examples/rules/pii.yaml) 包含邮箱和中国大陆手机号规则，只有加入 `rule_sources` 后启用；它不是完整 PII 识别器。
 
