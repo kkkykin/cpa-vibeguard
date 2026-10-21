@@ -26,7 +26,7 @@ plugins:
 
 商店以最新正式 Release 的 tag 为实际版本，`registry.json` 的 `version` 只作显示回退，无需每次自动发布后提交版本变更。当前 Release 仅提供上述平台的预编译包。
 
-**构建与安装。** 当前验证平台为 Linux/amd64，需要 Go 1.26.8、C 编译器和 Make。首次下载依赖需要网络；模块版本已固定，无本地 `replace`。宿主和 Caddy 构建脚本沿用根模块选定的 Go 工具链，缓存的 Caddy 若由旧工具链构建会自动重建。
+**构建与安装。** 当前验证平台为 Linux/amd64，需要 Go 1.26.10、C 编译器和 Make。首次下载依赖需要网络；模块版本已固定，无本地 `replace`。宿主和 Caddy 构建脚本沿用根模块选定的 Go 工具链，缓存的 Caddy 若由旧工具链构建会自动重建。
 
 ```sh
 make build
@@ -64,7 +64,7 @@ bin/cpa-host --config examples/cpa.yaml
 | 插件元数据版本 | 本地构建默认 `0.1.0-dev`；Release 构建使用对应 tag 去掉 `v` 的版本 |
 | CPA | `v7.2.157`，参考提交 `09a29bd345bc44c473abe7fd07859e32df2ea543` |
 | 原生接口 | C ABI 1 / RPC schema 6；注册时拒绝低于 6 的宿主 schema |
-| Go / 平台 | Go `1.26.8`，Linux/amd64，`CGO_ENABLED=1`、`-buildmode=c-shared` |
+| Go / 平台 | Go `1.26.10`，Linux/amd64，`CGO_ENABLED=1`、`-buildmode=c-shared` |
 | Gitleaks | `v8.30.1`，该版本默认启用 222 条官方规则 |
 | 可选前置代理 | 示例已用 Caddy `v2.10.2` 验证；插件本身不依赖 Caddy |
 | 其他 CPA 版本、操作系统和架构 | 尚未验收；不能仅凭 ABI 版本相同推断覆盖范围相同 |
